@@ -1,0 +1,40 @@
+# Models (too large)
+bge-m3/
+Qwen/
+models/
+
+# FAISS indexes (binary, large)
+faiss_v3_*/
+faiss_index_*/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+*.log
+api_server.pid
+
+# Database files (large binary)
+db/*.db
+
+# BM25 data
+bm25_idf.pkl
+
+# Citation cache
+citation_cache.db
+
+# Gene scan output
+gene_scan_output/
+
+# Eval output
+eval_output/
+
+# Backup files
+*.bak
+*.bak.*
+
+# Output
+app.out
+nohup.out

@@ -1,0 +1,558 @@
+[
+  {
+    "id": "Q001",
+    "question_type": "事实速查类",
+    "question": "What is the NCBI Gene ID of SbDW3 (SbCYP96B1) in sorghum?",
+    "standard_answer": "SbDW3 (also known as SbCYP96B1) has NCBI Gene ID 8082958. It encodes a cytochrome P450 monooxygenase involved in the gibberellin pathway regulating internode elongation and plant height.",
+    "keypoints": ["8082958", "cytochrome P450", "gibberellin", "plant height", "internode elongation"],
+    "required_citations": ["10.1111/tpj.12337"],
+    "relevant_papers": [
+      "A cytochrome P450 regulates a domesticated grain sorghum morphology.pdf"
+    ],
+    "difficulty": "easy",
+    "notes": "经典事实速查题，答案唯一"
+  },
+  {
+    "id": "Q002",
+    "question_type": "事实速查类",
+    "question": "What chromosome is the Ma1 gene located on in sorghum bicolor?",
+    "standard_answer": "The Ma1 (Maturity 1) gene in Sorghum bicolor is located on chromosome 6. It encodes a pseudo-response regulator (PRR37) that controls photoperiod-sensitive flowering time.",
+    "keypoints": ["chromosome 6", "PRR37", "pseudo-response regulator", "photoperiod", "flowering time"],
+    "required_citations": ["10.1073/pnas.1205414109"],
+    "relevant_papers": [
+      "Genomic and genetic characterization of sorghum photoperiodism.pdf"
+    ],
+    "difficulty": "easy",
+    "notes": "染色体定位速查"
+  },
+  {
+    "id": "Q003",
+    "question_type": "事实速查类",
+    "question": "What is the genome size of Sorghum bicolor BTx623 reference genome assembly?",
+    "standard_answer": "The Sorghum bicolor BTx623 reference genome is approximately 730 Mb, comprising 10 chromosomes. The first reference assembly was published in 2009 by Paterson et al. in Nature.",
+    "keypoints": ["730 Mb", "10 chromosomes", "BTx623", "Paterson", "2009"],
+    "required_citations": ["10.1038/nature07723"],
+    "relevant_papers": [
+      "The Sorghum bicolor genome and the diversification of grasses.pdf"
+    ],
+    "difficulty": "easy",
+    "notes": "基因组大小速查"
+  },
+  {
+    "id": "Q004",
+    "question_type": "基因功能类",
+    "question": "Please introduce the function and breeding significance of the SbMADS51 gene in sorghum.",
+    "standard_answer": "SbMADS51 is a MADS-box transcription factor in sorghum that functions as an FLC homolog. It regulates flowering time by repressing floral transition. Overexpression causes delayed flowering, affecting adaptability to different latitudes and photoperiods. In breeding, it can be utilized to adjust maturity and regional adaptation in sorghum varieties.",
+    "keypoints": [
+      "MADS-box transcription factor",
+      "FLC homolog",
+      "flowering time regulation",
+      "floral transition",
+      "delayed flowering",
+      "regional adaptation",
+      "breeding application"
+    ],
+    "required_citations": ["10.1093/plphys/kiac123"],
+    "relevant_papers": [
+      "SbMADS51 regulates flowering time in sorghum.pdf"
+    ],
+    "difficulty": "medium",
+    "notes": "经典基因功能题"
+  },
+  {
+    "id": "Q005",
+    "question_type": "基因功能类",
+    "question": "What is the function of the SH1 (SHATTERING1) gene in sorghum domestication?",
+    "standard_answer": "SHATTERING1 (SH1) encodes a YABBY transcription factor that controls seed shattering in sorghum. Loss-of-function mutations in SH1 caused the loss of seed shattering (non-shattering phenotype), which is a hallmark of sorghum domestication. The gene shows signatures of parallel domestication across cereals and is associated with broad geographical divergence and multiple independent domestication events.",
+    "keypoints": [
+      "YABBY transcription factor",
+      "seed shattering",
+      "non-shattering",
+      "domestication",
+      "parallel domestication",
+      "loss-of-function",
+      "geographical divergence"
+    ],
+    "required_citations": ["10.1038/ng.2077"],
+    "relevant_papers": [
+      "Parallel domestication of the Shattering1 genes in cereals.pdf",
+      "A sorghum pangenome reference improves global crop trait discovery.pdf"
+    ],
+    "difficulty": "medium",
+    "notes": "驯化基因功能题"
+  },
+  {
+    "id": "Q006",
+    "question_type": "基因功能类",
+    "question": "What is the role of the Dw3 gene in sorghum plant height regulation?",
+    "standard_answer": "Dw3 encodes a P-glycoprotein (SbPGP1) involved in polar auxin transport. Loss-of-function mutations cause dwarfism by disrupting auxin distribution along the stem. The dw3 allele has been widely used in breeding to reduce plant height for improved lodging resistance and mechanical harvesting. The gene is located on chromosome 7 and shows a unique reversion mutation rate.",
+    "keypoints": [
+      "P-glycoprotein",
+      "SbPGP1",
+      "polar auxin transport",
+      "auxin distribution",
+      "dwarfism",
+      "lodging resistance",
+      "chromosome 7"
+    ],
+    "required_citations": ["10.1105/tpc.105.034843"],
+    "relevant_papers": [
+      "Molecular basis of plant height in sorghum.pdf"
+    ],
+    "difficulty": "medium",
+    "notes": "株高基因功能"
+  },
+  {
+    "id": "Q007",
+    "question_type": "基因功能类",
+    "question": "请介绍高粱 Tan1（Tannin1）基因的功能及其对籽粒品质的影响。",
+    "standard_answer": "Tan1（Tannin1）编码一个 WD40 重复蛋白，是高粱籽粒中缩合单宁（condensed tannin/proanthocyanidin）合成的关键调控因子。Tan1 与 Tan2 协同调控原花青素合成通路，其功能缺失导致单宁含量降低。单宁存在于种皮（seed coat/testa）中，能够防止鸟害和真菌侵染，但同时降低蛋白质消化率（protein digestibility），是饲用和食用高粱育种中的重要靶标。",
+    "keypoints": [
+      "WD40 repeat protein",
+      "condensed tannin",
+      "proanthocyanidin",
+      "Tan2",
+      "seed coat",
+      "bird resistance",
+      "protein digestibility",
+      "breeding target"
+    ],
+    "required_citations": ["10.1105/tpc.111.084814"],
+    "relevant_papers": [
+      "Tannin1 and Tannin2 control the biosynthesis of condensed tannins in sorghum.pdf"
+    ],
+    "difficulty": "medium",
+    "notes": "品质性状基因"
+  },
+  {
+    "id": "Q008",
+    "question_type": "分子机制类",
+    "question": "Please explain the molecular mechanisms of ABA signaling in regulating drought tolerance in sorghum.",
+    "standard_answer": "ABA (abscisic acid) signaling regulates drought tolerance in sorghum through multiple layers: (1) Core signaling: PYR/PYL receptors perceive ABA and inhibit PP2C phosphatases, releasing SnRK2 kinases to activate downstream targets; (2) Stomatal regulation: ABA promotes stomatal closure by activating SLAC1 anion channels and inhibiting KAT inward K+ channels; (3) Gene expression: SnRK2 phosphorylates ABF/AREB transcription factors to induce drought-responsive genes (LEA proteins, dehydrins); (4) ROS scavenging: superoxide dismutase (SOD), catalase (CAT) systems are upregulated; (5) Osmotic adjustment: proline synthesis via SbP5CS is enhanced. Evidence in sorghum shows ABA-IAA crosstalk mediated by SbNAC21-1 also contributes to drought response.",
+    "keypoints": [
+      "PYR/PYL receptor",
+      "PP2C phosphatase",
+      "SnRK2 kinase",
+      "stomatal closure",
+      "SLAC1",
+      "ABF/AREB transcription factor",
+      "LEA protein",
+      "ROS scavenging",
+      "proline synthesis",
+      "SbP5CS",
+      "ABA-IAA crosstalk",
+      "SbNAC21-1"
+    ],
+    "required_citations": [
+      "10.1111/pce.15575",
+      "10.1016/j.plantsci.2020.110419"
+    ],
+    "relevant_papers": [
+      "Unlocking the Synergy ABA Seed Priming Enhances Drought Tolerance in Seedlings of Sweet Sorghum Through ABA-IAA Crosstalk.pdf"
+    ],
+    "difficulty": "hard",
+    "notes": "核心分子机制题，需要多层次回答"
+  },
+  {
+    "id": "Q009",
+    "question_type": "分子机制类",
+    "question": "请综合介绍高粱 stay-green 性状的分子遗传机制。",
+    "standard_answer": "Stay-green（持绿性）在高粱中涉及多个层次的调控：(1) 遗传位点：Stg1-Stg4 四个主效 QTL 位于不同染色体，其中 Stg1 和 Stg2 贡献最大；(2) 分子机制：延缓叶绿素降解（chlorophyll catabolism），PaO（pheophorbide a oxygenase）通路受到抑制，SbPaO1/SbPaO3/SbPaO4 的优良单倍型与更高千粒重关联；(3) 生理功能：维持光合作用时间（延长灌浆期有效光合），保持叶片含氮量，从而提高籽粒产量；(4) 抗旱关系：stay-green 品种在后期干旱下表现出更强的茎秆汁液保持能力，被认为是一种功能性 stay-green（functional stay-green）。",
+    "keypoints": [
+      "Stg1", "Stg2", "Stg3", "Stg4",
+      "chlorophyll catabolism",
+      "PaO pathway",
+      "SbPaO1", "SbPaO3", "SbPaO4",
+      "photosynthesis duration",
+      "grain filling",
+      "functional stay-green",
+      "drought tolerance"
+    ],
+    "required_citations": [
+      "10.1139/g00-001",
+      "10.3390/agronomy15112493"
+    ],
+    "relevant_papers": [
+      "Molecular mapping of QTLs conferring stay-green in grain sorghum.pdf",
+      "Genome-Wide Characterization of the PaO Gene Family and Pyramiding Effects of Superior Haplotypes on Yield-Related Traits in Sorghum.pdf"
+    ],
+    "difficulty": "hard",
+    "notes": "多层次综合机制题"
+  },
+  {
+    "id": "Q010",
+    "question_type": "分子机制类",
+    "question": "How does the DG1 promoter inversion regulate double-grain spikelet trait in sorghum?",
+    "standard_answer": "The DG1 (Double Grain 1) gene controls spikelet development in sorghum. A chromosomal inversion in the DG1 promoter region removes repressive histone modifications (H3K27me3 and H3K9me2), leading to increased DG1 expression. This elevated expression promotes the fertility of the lower floret in the paired spikelet, resulting in the double-grain phenotype. The favorable DG1 inversion allele increases final grain yield by approximately 10.1–12.4% without significant effects on other agronomic traits, making it a valuable target for yield improvement through molecular breeding.",
+    "keypoints": [
+      "chromosomal inversion",
+      "H3K27me3",
+      "H3K9me2",
+      "histone modification",
+      "lower floret fertility",
+      "paired spikelet",
+      "double-grain phenotype",
+      "10-12% yield increase",
+      "molecular breeding"
+    ],
+    "required_citations": ["10.1007/s10142-025-01637-7"],
+    "relevant_papers": [
+      "Doubling the grain Harnessing the power of DG1 promoter inversion in sorghum.pdf"
+    ],
+    "difficulty": "medium",
+    "notes": "结构变异调控机制"
+  },
+  {
+    "id": "Q011",
+    "question_type": "QTL / GWAS类",
+    "question": "What are the major QTL findings for grain protein content in sorghum, and which populations were used?",
+    "standard_answer": "Major QTL studies for grain protein content in sorghum include: (1) Murray et al. (2008) identified 4 QTLs on chromosomes 1, 2, 4, and 9 using the BTx623×IS3620C RIL population; (2) Boyles et al. (2017) conducted GWAS with 357 diverse accessions and identified 6 significant association loci; (3) Candidate genes include kafirin (prolamin storage protein) gene clusters at associated loci. Environmental interaction effects are significant, with loci showing variable expression across locations and years.",
+    "keypoints": [
+      "BTx623×IS3620C",
+      "chromosomes 1, 2, 4, 9",
+      "Murray 2008",
+      "Boyles 2017",
+      "357 accessions",
+      "GWAS",
+      "kafirin",
+      "environmental interaction"
+    ],
+    "required_citations": [
+      "10.1007/s00122-008-0742-4",
+      "10.1371/journal.pone.0190477"
+    ],
+    "relevant_papers": [
+      "QTL analysis of grain protein content in sorghum.pdf",
+      "GWAS for grain quality traits in sorghum.pdf"
+    ],
+    "difficulty": "medium",
+    "notes": "QTL定位经典题"
+  },
+  {
+    "id": "Q012",
+    "question_type": "QTL / GWAS类",
+    "question": "What GWAS results have been reported for drought tolerance traits in sorghum, and what candidate genes were identified?",
+    "standard_answer": "GWAS for drought tolerance in sorghum has identified multiple significant loci: (1) Transpiration efficiency (TE) QTLs on multiple chromosomes, with candidate genes including aquaporins and NCED (9-cis-epoxycarotenoid dioxygenase) for ABA biosynthesis; (2) Root architectural traits: deep-rooting QTLs on chromosomes 1 and 3; (3) Stay-green: Stg1-Stg4 loci identified through linkage mapping; (4) Osmotic adjustment: proline accumulation QTLs. Population sizes in key studies range from 200-400 diverse accessions, and multi-environment trials reveal significant genotype-by-environment (G×E) interactions for most drought-related traits.",
+    "keypoints": [
+      "transpiration efficiency",
+      "aquaporin",
+      "NCED",
+      "ABA biosynthesis",
+      "deep-rooting QTL",
+      "Stg1-Stg4",
+      "osmotic adjustment",
+      "proline",
+      "G×E interaction",
+      "multi-environment"
+    ],
+    "required_citations": [
+      "10.1016/j.indcrop.2025.122343",
+      "10.3389/fpls.2021.662214"
+    ],
+    "relevant_papers": [
+      "Genetic dissection of transpiration efficiency and shoot traits in sorghum reveals genetic loci relevant to drought tolerance.pdf"
+    ],
+    "difficulty": "hard",
+    "notes": "复合性状GWAS题"
+  },
+  {
+    "id": "Q013",
+    "question_type": "QTL / GWAS类",
+    "question": "请介绍高粱粒宽（grain width）和千粒重（thousand-grain weight）相关基因的 GWAS 和单倍型分析结果。",
+    "standard_answer": "针对高粱粒宽和千粒重的遗传解析研究鉴定了多个关键基因：(1) SbGS2、SbGS3、SbGS5 调控粒宽（grain width/size），SbGW8、SbGW6、SbGW2 与粒宽变异关联；(2) SbTGW3 对千粒重影响显著，SbTGW3-hap5 单倍型可显著增加 TGW；(3) SbPaO1-hap4、SbPaO3-hap5、SbPaO4-hap4 三个优良单倍型聚合可使 TGW 增加约 29%；(4) 已针对 SbTGW3 和 SbGS5 开发了 KASP 标记用于分子标记辅助育种。遗传多样性分析表明这些粒型性状在群体中遗传稳定性较强。",
+    "keypoints": [
+      "SbGS2", "SbGS3", "SbGS5",
+      "SbGW8", "SbGW6", "SbGW2",
+      "SbTGW3",
+      "SbPaO1", "SbPaO3", "SbPaO4",
+      "haplotype analysis",
+      "KASP marker",
+      "29% TGW increase",
+      "marker-assisted selection"
+    ],
+    "required_citations": [
+      "10.1186/s12870-025-07998-2",
+      "10.3390/agronomy15112493"
+    ],
+    "relevant_papers": [
+      "Genetic diversity analysis of sorghum grain traits and development of KASP markers for grain width genes SbTGW3 and SbGS5.pdf",
+      "Genome-Wide Characterization of the PaO Gene Family and Pyramiding Effects of Superior Haplotypes on Yield-Related Traits in Sorghum.pdf"
+    ],
+    "difficulty": "medium",
+    "notes": "粒型性状GWAS单倍型题"
+  },
+  {
+    "id": "Q014",
+    "question_type": "文献定位类",
+    "question": "Please find the representative paper on QTL mapping of stay-green trait in sorghum and provide the complete reference information.",
+    "standard_answer": "Xu et al. (2000) published the landmark study on stay-green QTL mapping in sorghum: Title: Molecular mapping of QTLs conferring stay-green in grain sorghum (Sorghum bicolor L. Moench); Authors: Xu, W.; Subudhi, P.K.; Crasta, O.R.; Rosenow, D.T.; Mullet, J.E.; Nguyen, H.T.; Journal: Genome; Year: 2000; Volume: 43; Pages: 461-469; DOI: 10.1139/g00-001. This paper identified Stg1-Stg4 four major QTLs.",
+    "keypoints": [
+      "Xu et al. 2000",
+      "Stg1", "Stg2", "Stg3", "Stg4",
+      "Journal: Genome",
+      "DOI: 10.1139/g00-001",
+      "Nguyen H.T.",
+      "Rosenow D.T."
+    ],
+    "required_citations": ["10.1139/g00-001"],
+    "relevant_papers": [
+      "Molecular mapping of QTLs conferring stay-green in grain sorghum.pdf"
+    ],
+    "difficulty": "easy",
+    "notes": "经典文献定位题"
+  },
+  {
+    "id": "Q015",
+    "question_type": "文献定位类",
+    "question": "哪篇文章首次报道了高粱泛基因组（pangenome）参考序列，发表在什么期刊？",
+    "standard_answer": "Morris et al. (2024/2025) 在 Nature 期刊发表了高粱泛基因组参考序列研究。文章标题为 'A sorghum pangenome reference improves global crop trait discovery'，通过整合多个高粱基因组组装构建了包含结构变异的泛基因组，显著提升了全球高粱性状发掘的能力，并以 k-mer 基因分型技术解析了 SH1 等驯化基因的复杂结构变异。",
+    "keypoints": [
+      "Morris et al.",
+      "Nature",
+      "sorghum pangenome",
+      "structural variation",
+      "k-mer genotyping",
+      "crop trait discovery",
+      "SH1"
+    ],
+    "required_citations": ["10.1038/s41586-026-10229-9"],
+    "relevant_papers": [
+      "A sorghum pangenome reference improves global crop trait discovery.pdf"
+    ],
+    "difficulty": "easy",
+    "notes": "新近文献定位题"
+  },
+  {
+    "id": "Q016",
+    "question_type": "文献定位类",
+    "question": "Which paper first cloned and characterized the SH1 gene controlling seed shattering in sorghum?",
+    "standard_answer": "Lin et al. (2012) published the landmark paper cloning SH1: Title: 'Parallel domestication of the Shattering1 genes in cereals'; Authors: Lin, Z.; Li, X.; Shannon, L.M.; Yeh, C.T.; Wang, M.L.; Bai, G.; Peng, Z.; Li, J.; Trick, H.N.; Clemente, T.E.; Doebley, J.; Schnable, P.S.; Tuinstra, M.R.; Tesso, T.T.; White, F.; Yu, J.; Journal: Nature Genetics; Year: 2012; Volume: 44; Pages: 720-724; DOI: 10.1038/ng.2077.",
+    "keypoints": [
+      "Lin et al. 2012",
+      "Nature Genetics",
+      "DOI: 10.1038/ng.2077",
+      "parallel domestication",
+      "YABBY transcription factor",
+      "Yu J."
+    ],
+    "required_citations": ["10.1038/ng.2077"],
+    "relevant_papers": [
+      "Parallel domestication of the Shattering1 genes in cereals.pdf"
+    ],
+    "difficulty": "medium",
+    "notes": "克隆鉴定文献定位"
+  },
+  {
+    "id": "Q017",
+    "question_type": "综述比较类",
+    "question": "请综合介绍高粱驯化基因组学的主要进展，包括基因组选择信号、经典驯化基因和研究方法。",
+    "standard_answer": "高粱驯化基因组学主要进展包括：(1) 基因组选择信号：重测序研究（445份种质，23百万SNP）揭示约15%的基因组受驯化和多样化选择的塑造；(2) 经典驯化基因：SH1（落粒性，YABBY转录因子）、Dw1/Dw2/Dw3（株高，极性生长素运输）、Ma1/Ma6（成熟期，PRR37，GI同源）、Tan1/Tan2（单宁合成）；(3) 研究方法：从早期连锁作图发展到全基因组关联分析（GWAS）和泛基因组（pangenome）方法；(4) 泛基因组：揭示了栽培种和野生种之间广泛的结构变异（structural variation），k-mer基因分型技术可精准解析复杂结构变异位点；(5) 驯化综合征：落粒性丧失、种子休眠降低、株高降低、早熟性是核心驯化性状。",
+    "keypoints": [
+      "15% genome under selection",
+      "23 million SNPs",
+      "SH1 YABBY",
+      "Dw1/Dw2/Dw3",
+      "Ma1 PRR37",
+      "Ma6 GI homolog",
+      "Tan1/Tan2",
+      "pangenome",
+      "structural variation",
+      "k-mer genotyping",
+      "domestication syndrome",
+      "seed shattering loss",
+      "seed dormancy reduction"
+    ],
+    "required_citations": [
+      "10.1038/ng.2077",
+      "10.1038/s41586-026-10229-9",
+      "10.1016/j.molp.2026.02.003"
+    ],
+    "relevant_papers": [
+      "Parallel domestication of the Shattering1 genes in cereals.pdf",
+      "A sorghum pangenome reference improves global crop trait discovery.pdf",
+      "Sorghum2035 A decadal vision for sorghum functional genomics and molecular breeding.pdf"
+    ],
+    "difficulty": "hard",
+    "notes": "综合驯化基因组学综述题"
+  },
+  {
+    "id": "Q018",
+    "question_type": "综述比较类",
+    "question": "Compare the similarities and differences in starch synthesis regulation between sorghum and maize.",
+    "standard_answer": "Similarities: (1) Both rely on ADP-glucose pyrophosphorylase (AGPase) as the rate-limiting step; (2) Key enzyme gene families (GBSS, SSI, SSII, SBE) are highly conserved; (3) Both have waxy (wx) alleles controlling amylose/amylopectin ratio. Differences: (1) Waxy gene: sorghum Wx shows richer allelic diversity, leading to greater variation in branched/linear starch ratios; (2) Protein matrix: sorghum starch is embedded in a more compact kafirin protein matrix, resulting in lower digestibility; (3) Tannin effect: condensed tannins in sorghum form protein-polyphenol complexes that further reduce starch digestibility; (4) Transcriptional regulation: the maize O2/Opaque system has functional divergence in its sorghum homologs.",
+    "keypoints": [
+      "AGPase rate-limiting step",
+      "GBSS conserved",
+      "SSI conserved",
+      "SBE conserved",
+      "Waxy allelic diversity",
+      "kafirin protein matrix",
+      "lower digestibility",
+      "tannin-protein complex",
+      "O2/Opaque homolog divergence"
+    ],
+    "required_citations": [
+      "10.1016/j.jcs.2016.04.013",
+      "10.1094/CCHEM-03-17-0050-R"
+    ],
+    "relevant_papers": [
+      "Comparative analysis of starch biosynthesis in sorghum and maize.pdf"
+    ],
+    "difficulty": "hard",
+    "notes": "跨物种比较综述题"
+  },
+  {
+    "id": "Q019",
+    "question_type": "综述比较类",
+    "question": "请综述高粱抗旱性的主要遗传机制，并比较功能性持绿（functional stay-green）和形态性持绿（cosmetic stay-green）的区别。",
+    "standard_answer": "高粱抗旱遗传机制涵盖多个层面：(1) 水分获取：根系深度 QTL（染色体1、3），根系构型影响深层土壤水分利用；(2) 水分利用效率：蒸腾效率（TE）QTL，气孔调控（ABA信号通路）；(3) 渗透调节：脯氨酸积累（SbP5CS）、可溶性糖积累；(4) 氧化胁迫清除：SOD、CAT、APX 抗氧化酶系统。功能性持绿（functional stay-green）与形态性持绿区别：功能性：叶片保持光合活性，气孔导度维持，与产量形成相关，Stg1-Stg4 QTL 代表；形态性（cosmetic）：叶片外观绿色但光合活性已丧失，与产量无关。功能性持绿与茎秆汁液保持（stalk sugar retention）和灌浆期延长协同作用，是高粱改良的重要育种目标。",
+    "keypoints": [
+      "root depth QTL",
+      "transpiration efficiency",
+      "ABA signaling",
+      "proline SbP5CS",
+      "osmotic adjustment",
+      "SOD CAT APX",
+      "functional stay-green",
+      "cosmetic stay-green",
+      "photosynthetic activity",
+      "Stg1-Stg4",
+      "stalk sugar retention",
+      "grain filling"
+    ],
+    "required_citations": [
+      "10.3389/fpls.2021.662214",
+      "10.1139/g00-001"
+    ],
+    "relevant_papers": [
+      "Sorghum drought tolerance mechanisms and stay-green trait.pdf",
+      "Molecular mapping of QTLs conferring stay-green in grain sorghum.pdf"
+    ],
+    "difficulty": "hard",
+    "notes": "抗旱机制比较综述题"
+  },
+  {
+    "id": "Q020",
+    "question_type": "综述比较类",
+    "question": "What are the main advances in sorghum genomics over the past decade, and what future research directions are proposed?",
+    "standard_answer": "Major advances in sorghum genomics (2015-2025): (1) Reference genome improvement: from BTx623 v1 to high-quality chromosome-scale assemblies; (2) Pan-genome: multi-accession assemblies revealing structural variation absent in single reference; (3) Population genomics: resequencing of 1000+ accessions globally, identifying domestication sweeps; (4) Functional genomics: gene regulatory networks for development and stress response; (5) GWAS: thousands of loci for agronomic traits. Future directions proposed in Sorghum2035 vision: (1) Functional annotation of non-coding regulatory elements; (2) Multi-omics integration (genomics, transcriptomics, metabolomics, proteomics); (3) Gene editing (CRISPR) for trait improvement; (4) Climate-resilient breeding using genomic selection; (5) Pan-genome enabled breeding of locally adapted alleles.",
+    "keypoints": [
+      "BTx623 reference",
+      "pan-genome",
+      "structural variation",
+      "population genomics",
+      "domestication sweeps",
+      "gene regulatory network",
+      "GWAS agronomic traits",
+      "non-coding regulatory elements",
+      "multi-omics",
+      "CRISPR gene editing",
+      "genomic selection",
+      "climate-resilient",
+      "locally adapted alleles"
+    ],
+    "required_citations": [
+      "10.1016/j.molp.2026.02.003",
+      "10.1038/s41586-026-10229-9"
+    ],
+    "relevant_papers": [
+      "Sorghum2035 A decadal vision for sorghum functional genomics and molecular breeding.pdf",
+      "A sorghum pangenome reference improves global crop trait discovery.pdf"
+    ],
+    "difficulty": "hard",
+    "notes": "领域综述展望题"
+  },
+  {
+    "id": "Q021",
+    "question_type": "边界拒答类",
+    "question": "高粱 SbGW5 基因敲除株系在 2025 年田间试验中的产量表现如何？",
+    "standard_answer": "该问题超出当前文献知识库的支持范围。目前没有关于 SbGW5 基因 2025 年田间试验的具体公开数据，且 SbGW5 在高粱中是否已有完整功能验证的公开文献尚不明确。建议查阅最新 preprint 数据库（如 bioRxiv）或联系相关课题组获取最新数据。",
+    "keypoints": [
+      "超出知识边界",
+      "无2025年田间数据",
+      "SbGW5功能验证不明确",
+      "建议查阅最新文献"
+    ],
+    "required_citations": [],
+    "relevant_papers": [],
+    "boundary": true,
+    "difficulty": "easy",
+    "notes": "未来数据边界题"
+  },
+  {
+    "id": "Q022",
+    "question_type": "边界拒答类",
+    "question": "高粱的市场价格今年会上涨还是下跌？",
+    "standard_answer": "该问题超出高粱科研文献知识库可直接支持的范围。市场价格预测涉及经济学、气候预报、供需关系等复杂因素，当前系统主要基于科研文献回答高粱基因、基因组、遗传定位、育种和分子机制相关问题，无法对市场走势做出可靠预测。建议咨询农产品市场分析机构或查阅农业经济学相关数据。",
+    "keypoints": [
+      "超出科研文献范围",
+      "市场预测非文献能支持",
+      "建议咨询专业机构"
+    ],
+    "required_citations": [],
+    "relevant_papers": [],
+    "boundary": true,
+    "difficulty": "easy",
+    "notes": "市场预测边界题"
+  },
+  {
+    "id": "Q023",
+    "question_type": "边界拒答类",
+    "question": "Which sorghum variety tastes better for human consumption, BTx623 or Rio?",
+    "standard_answer": "This question is beyond the scope of the current sorghum literature knowledge base. Taste preference is subjective and depends on preparation methods, cultural preferences, and individual perception. The system is designed to answer questions about sorghum genetics, genomics, breeding mechanisms, and molecular biology based on scientific literature. For food quality comparisons, sensory evaluation studies or consumer preference surveys from food science literature would be more appropriate resources.",
+    "keypoints": [
+      "beyond scope",
+      "subjective preference",
+      "not supported by molecular literature",
+      "sensory evaluation",
+      "food science literature"
+    ],
+    "required_citations": [],
+    "relevant_papers": [],
+    "boundary": true,
+    "difficulty": "easy",
+    "notes": "主观偏好边界题"
+  },
+  {
+    "id": "Q024",
+    "question_type": "边界拒答类",
+    "question": "请预测2030年高粱基因编辑技术的发展方向和商业化前景。",
+    "standard_answer": "该问题涉及未来预测，超出当前文献知识库可直接支持的范围。基于现有文献，可以描述截至知识截止日期的高粱基因编辑研究现状（如CRISPR-Cas9在高粱中的应用进展），但无法对2030年的技术发展和商业化前景做出可靠预测。建议参考最新的技术路线图文献或行业报告，如 Sorghum2035 等前瞻性综述中提出的研究方向。",
+    "keypoints": [
+      "未来预测超出范围",
+      "CRISPR现状可描述",
+      "商业化预测无法支持",
+      "建议参考Sorghum2035"
+    ],
+    "required_citations": [],
+    "relevant_papers": [],
+    "boundary": true,
+    "difficulty": "medium",
+    "notes": "未来预测边界题，需要区分现状描述和预测"
+  },
+  {
+    "id": "Q025",
+    "question_type": "综述比较类",
+    "question": "请比较高粱与野生近缘种 Sorghum virgatum 在基因组结构和农艺性状上的主要差异，以及野生种在育种中的应用价值。",
+    "standard_answer": "高粱（Sorghum bicolor）与野生近缘种 S. virgatum 的主要差异：(1) 基因组结构：S. virgatum 基因组组装达到染色体级别，与 BTx623 比较揭示了丰富的结构变异（SV）；(2) 种子落粒性：S. virgatum 保留强落粒性（Sh1 野生等位基因），而栽培高粱已驯化为不落粒；(3) 分蘖和茎秆：野生种分蘖更旺盛，茎秆含糖量和生物量特征不同；(4) 育种应用：利用 S. virgatum × Tx430 杂交群体成功定位了 Sh1 基因和 AWN1 基因，以及 24 个控制各种性状的 QTL，证明野生种是解析栽培性状遗传基础的重要遗传资源；(5) 可挖掘到栽培高粱中丢失的抗病、抗虫等抗性等位基因。",
+    "keypoints": [
+      "chromosome-scale assembly",
+      "structural variation",
+      "Sh1 wild allele",
+      "seed shattering",
+      "AWN1",
+      "24 QTLs",
+      "Tx430",
+      "Tx623",
+      "genetic resource",
+      "resistance alleles",
+      "lost diversity"
+    ],
+    "required_citations": ["10.1038/s41597-025-05907-8"],
+    "relevant_papers": [
+      "A high-quality chromosome-scale genome assembly of the wild sorghum (Sorghum virgatum).pdf"
+    ],
+    "difficulty": "medium",
+    "notes": "野生种比较综述题"
+  }
+]

@@ -1,0 +1,81 @@
+import os
+
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
+os.environ["MKL_THREADING_LAYER"] = "GNU"
+os.environ["MKL_SERVICE_FORCE_INTEL"] = "1"
+
+# 模型路径 - 本项目目录
+MODEL_PATH = os.path.join(_THIS_DIR, "bge-m3")
+SMALL_MODEL_PATH = os.path.join(_THIS_DIR, "Qwen", "Qwen2.5-7B-Instruct")
+
+# API配置
+BASE_URL = "http://10.122.14.169:30000/v1"
+API_KEY = "EMPTY"
+LOCAL_MODEL_NAME = "/data/models/Qwen/Qwen3.5-397B-A17B"
+
+# 索引路径 - 本项目目录
+META_INDEX_PATHS = {
+    "english": os.path.join(_THIS_DIR, "faiss_v3_meta_english"),
+}
+
+FULLTEXT_INDEX_PATHS = {
+    "en_fine":  os.path.join(_THIS_DIR, "faiss_v3_english_fine"),
+    "en_std":   os.path.join(_THIS_DIR, "faiss_v3_english_std"),
+    "en_large": os.path.join(_THIS_DIR, "faiss_v3_english_large"),
+    "en_para":  os.path.join(_THIS_DIR, "faiss_v3_english_para"),
+}
+
+CSV_PATHS = [
+    "/vol/sunjilin/website/data/publication/english_content.csv",
+    "/vol/sunjilin/website/data/publication/updated_records.csv",
+]
+
+GENE_DB_PATH = os.path.join(_THIS_DIR, "db", "sorghum_genes.db")
+
+TOP_META_K = 60
+TOP_CHUNK_K = 30
+FINAL_CONTEXT_K = 12
+COUNT_QUERY_FETCH_K = 300
+COUNT_QUERY_MAX_SHOW = 200
+
+DEFAULT_NPROBE = 64
+USE_FAISS_GPU = True
+GPU_DEVICE = 0
+
+REFERENCE_LIMITS = {
+    "factoid": 6, "gene_function": 10, "mechanism": 12,
+    "qtl_gwas": 12, "locate": 3, "review": 15,
+    "gene_list": 15, "count": 20, "boundary": 0,
+}
+
+EVIDENCE_LIMITS = {
+    "factoid": 12, "gene_function": 20, "mechanism": 24,
+    "qtl_gwas": 16, "locate": 0, "review": 24,
+    "gene_list": 24, "count": 0, "boundary": 0,
+}
+
+QUERY_TYPE_TO_INDEXES = {
+    "factoid": ["en_fine", "en_std"],
+    "gene_function": ["en_fine", "en_std", "en_large"],
+    "mechanism": ["en_std", "en_large", "en_fine", "en_para"],
+    "qtl_gwas": ["en_std", "en_fine", "en_large"],
+    "review": ["en_para", "en_large", "en_std", "en_fine"],
+    "gene_list": ["en_fine", "en_std", "en_large", "en_para"],
+    "locate": [], "count": [], "boundary": [],
+}
+
+SECTION_BONUS = {
+    "abstract": 0.10, "results": 0.08, "discussion": 0.08,
+    "introduction": 0.03, "methods": -0.03, "references": -0.50,
+}
+
+HIGH_IMPACT_JOURNALS = {
+    "nature": 10.0, "science": 10.0, "cell": 10.0,
+    "nature genetics": 9.8, "molecular plant": 9.0,
+    "plant cell": 8.8, "pnas": 8.5, "new phytologist": 8.0,
+    "genome biology": 8.0, "plant biotechnology journal": 7.8,
+    "the plant journal": 6.8,
+}
