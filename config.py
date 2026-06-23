@@ -31,7 +31,7 @@ SMALL_MODEL_PATH = "/vol/sunjilin/website/data/agent/models/Qwen/Qwen2.5-7B-Inst
 # DeepSeek V4 Pro API
 # -----------------------------
 BASE_URL        = "https://api.deepseek.com/v1"
-API_KEY         = "sk-a276379abb014336a1280304e26f5aec"
+API_KEY         = os.environ.get("DEEPSEEK_API_KEY", "")
 LOCAL_MODEL_NAME = "deepseek-reasoner"
 
 # -----------------------------

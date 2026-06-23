@@ -38,3 +38,4 @@ eval_output/
 # Output
 app.out
 nohup.out
+.env

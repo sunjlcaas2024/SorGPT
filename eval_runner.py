@@ -49,12 +49,12 @@ from collections import defaultdict, Counter
 
 # SorGPT API
 SORGPT_BASE_URL = "http://localhost:8000"  # internal server IP
-SORGPT_API_KEY = os.environ.get("SORGPT_API_KEY", "sk-6a687dfd1e7d4cd09ebe9afc612965a5")
+SORGPT_API_KEY = os.environ.get("SORGPT_API_KEY", "")
 SORGPT_REQUEST_DELAY = 12  # seconds between queries (respect rate limit)
 
 # Evaluation LLM (DeepSeek Reasoner — same as SorGPT generator, but used for entailment/verification)
 EVAL_BASE_URL = "https://api.deepseek.com/v1"
-EVAL_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "sk-a276379abb014336a1280304e26f5aec")
+EVAL_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "")
 EVAL_MODEL = "deepseek-reasoner"
 
 # Paths
