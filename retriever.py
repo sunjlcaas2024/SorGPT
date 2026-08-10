@@ -248,6 +248,17 @@ class Retriever:
         _dynamic_mult = 8 if query_type in ("count", "review", "gene_list") else 4
         chosen_indexes = self.choose_indexes(query_type)
 
+        # ── 按查询语言过滤索引库：中文问题只搜中文库，英文问题只搜英文库 ──
+        chinese_chars = sum(1 for c in user_query if "一" <= c <= "鿿")
+        is_cn = chinese_chars / max(len(user_query), 1) > 0.15
+        if is_cn:
+            chosen_indexes = [i for i in chosen_indexes if i.startswith("zh_")]
+        else:
+            chosen_indexes = [i for i in chosen_indexes if i.startswith("en_")]
+        # 确保至少有一个索引被选中（fallback）
+        if not chosen_indexes:
+            chosen_indexes = self.choose_indexes(query_type)
+
         # Track content hashes for std/large dedup
         _content_hashes = {}  # source -> set of content prefixes
 
