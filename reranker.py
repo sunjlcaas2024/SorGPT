@@ -250,17 +250,17 @@ class Reranker:
                 _cnt = len(_scores)
                 if query_type == "gene_list":
                     # 需要多chunk支撑 或 高BM25均值
-                    if _avg >= 0.5 or _cnt >= 3:
+                    if _avg >= 0.2 or _cnt >= 1:
                         _keep_papers.add(_src)
                 else:
                     # gene_function / factoid / qtl_gwas: 1-2个chunk但BM25高即可
-                    if _avg >= 0.3:
+                    if _avg >= 0.1:
                         _keep_papers.add(_src)
             
             # 确保至少有 limit/2 篇论文，防止过度过滤
-            if len(_keep_papers) < limit // 2:
+            if len(_keep_papers) < limit:
                 _sorted = sorted(_paper_scores.items(), key=lambda x: _np.mean(x[1]), reverse=True)
-                for _src, _ in _sorted[:limit//2]:
+                for _src, _ in _sorted[:limit]:
                     _keep_papers.add(_src)
             
             hits = [h for h in hits if basename_lower(h.source) in _keep_papers]

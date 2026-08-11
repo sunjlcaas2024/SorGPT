@@ -7,7 +7,7 @@ import os
 
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:128"
-os.environ["MKL_THREADING_LAYER"] = "GNU"
+os.environ["MKL_THREADING_LAYER"] = "sequential"  # was GNU, changed to sequential to fix MKL 2025 deadlock
 os.environ["MKL_SERVICE_FORCE_INTEL"] = "1"
 
 # -----------------------------
@@ -28,17 +28,18 @@ SMALL_MODEL_PATH = "/vol/sunjilin/website/data/agent/models/Qwen/Qwen2.5-7B-Inst
 # LOCAL_MODEL_NAME = "/data/models/Qwen/Qwen3.5-397B-A17B"
 
 # -----------------------------
-# DeepSeek V4 Pro API
+# Dashscope Qwen API (local cost-saving)
 # -----------------------------
 BASE_URL        = "https://api.deepseek.com/v1"
-API_KEY         = os.environ.get("DEEPSEEK_API_KEY", "")
-LOCAL_MODEL_NAME = "deepseek-reasoner"
+API_KEY         = "sk-8571d510f5fb43219eecf86a85d8def6"
+LOCAL_MODEL_NAME = "deepseek-v4-pro"
 
 # -----------------------------
 # 元数据索引路径
 # -----------------------------
 META_INDEX_PATHS = {
     "english": "/vol/sunjilin/website/data/agent/faiss_v3_meta_english",
+    "chinese": "/vol/sunjilin/website/data/agent/faiss_index_meta_chinese",
 }
 
 # -----------------------------
@@ -49,6 +50,9 @@ FULLTEXT_INDEX_PATHS = {
     "en_std":   "/vol/sunjilin/website/data/agent/faiss_v3_english_std",
     "en_large": "/vol/sunjilin/website/data/agent/faiss_v3_english_large",
     "en_para":  "/vol/sunjilin/website/data/agent/faiss_v3_english_para",
+    "zh_fine":  "/vol/sunjilin/website/data/agent/faiss_index_chinese_fine",
+    "zh_std":   "/vol/sunjilin/website/data/agent/faiss_index_chinese_std",
+    "zh_large": "/vol/sunjilin/website/data/agent/faiss_index_chinese_large",
 }
 
 # -----------------------------
@@ -56,6 +60,7 @@ FULLTEXT_INDEX_PATHS = {
 # -----------------------------
 CSV_PATHS = [
     "/vol/sunjilin/website/data/publication/english_content_merged.csv",
+    "/vol/sunjilin/website/data/publication/chinese_content.csv",
 ]
 
 # -----------------------------
@@ -76,7 +81,7 @@ COUNT_QUERY_MAX_SHOW = 200
 # -----------------------------
 # FAISS 运行参数
 # -----------------------------
-DEFAULT_NPROBE = 64
+DEFAULT_NPROBE = 256
 USE_FAISS_GPU  = False
 GPU_DEVICE     = 0
 
@@ -114,12 +119,12 @@ EVIDENCE_LIMITS = {
 # 各问题类型对应的全文库选择策略
 # -----------------------------
 QUERY_TYPE_TO_INDEXES = {
-    "factoid":      ["en_fine", "en_std"],
-    "gene_function":["en_fine", "en_std", "en_large"],
-    "mechanism":    ["en_std", "en_large", "en_fine", "en_para"],
-    "qtl_gwas":     ["en_std", "en_fine", "en_large"],
-    "review":       ["en_para", "en_large", "en_std", "en_fine"],
-    "gene_list":    ["en_fine", "en_std", "en_large", "en_para"],
+    "factoid":      ["en_fine", "en_std", "zh_fine", "zh_std"],
+    "gene_function":["en_fine", "en_std", "en_large", "zh_fine", "zh_std", "zh_large"],
+    "mechanism":    ["en_std", "en_large", "en_fine", "en_para", "zh_std", "zh_large", "zh_fine"],
+    "qtl_gwas":     ["en_std", "en_fine", "en_large", "zh_std", "zh_fine", "zh_large"],
+    "review":       ["en_para", "en_large", "en_std", "en_fine", "zh_large", "zh_std", "zh_fine"],
+    "gene_list":    ["en_fine", "en_std", "en_large", "en_para", "zh_fine", "zh_std", "zh_large"],
     "locate":       [],
     "count":        [],
     "boundary":     [],
@@ -187,4 +192,22 @@ HIGH_IMPACT_JOURNALS = {
     "plant molecular biology":       6.0,
     "journal of cereal science":     4.0,
     "field crops research":          4.5,
+    # Chinese journals (CNKI composite IF mapped to JCR scale)
+    "作物学报":               5.5,
+    "中国农业科学":           6.0,
+    "核农学报":               4.0,
+    "植物遗传资源学报":       4.0,
+    "麦类作物学报":           3.5,
+    "中国油料作物学报":       3.0,
+    "玉米科学":               2.5,
+    "大豆科学":               2.0,
+    "山东农业科学":           2.0,
+    "植物生理学报":           2.5,
+    "江苏农业学报":           2.0,
+    "华北农学报":             1.5,
+    "河南农业科学":           1.5,
+    "江西农业学报":           1.5,
+    "湖北农业科学":           1.0,
+    "西北农业学报":           1.0,
+    "安徽农业科学":           0.5,
 }
