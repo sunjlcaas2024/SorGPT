@@ -72,7 +72,7 @@ GENE_DB_PATH = os.path.join(_THIS_DIR, "db", "sorghum_genes.db")
 # -----------------------------
 # 检索参数
 # -----------------------------
-TOP_META_K           = 120
+TOP_META_K           = 200
 TOP_CHUNK_K          = 30
 FINAL_CONTEXT_K      = 12
 COUNT_QUERY_FETCH_K  = 300
