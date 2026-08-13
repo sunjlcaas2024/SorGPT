@@ -136,6 +136,10 @@ def format_authors(authors_raw: str) -> str:
     parts = [a.strip() for a in re.split(r"[;|]", authors_raw) if a.strip()]
     out = []
     for p in parts[:6]:
+        # 清理中文作者的单位标记：[1]、[1,2]、[1, 2] 等
+        p = re.sub(r"\[[0-9,\s]+\]", "", p).strip()
+        if not p:
+            continue
         if "," in p:
             seg = [x.strip() for x in p.split(",", 1)]
             last = seg[0]
