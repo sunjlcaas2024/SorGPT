@@ -210,7 +210,7 @@ def _is_gene_function(q, q_orig):
         return False
     # 含机制词时让 mechanism 接管，不走 gene_function
     mech_words = [
-        "how does","how do","mechanism","pathway","signaling",
+        "mechanism","pathway","signaling",
         "promoter","inversion","molecular mechanism","regulate the",
         "分子机制","调控机制","信号通路",
     ]
@@ -223,6 +223,8 @@ def _is_gene_function(q, q_orig):
         "function","role","what does","what is",
         "describe","explain","encode","expression",
         "mutant","knockout","overexpression","phenotype","about",
+        "what protein","belong","family","regulate","regulates",
+        "what kind","which family","属于","家族","蛋白家族",
     ]
     has_verb = any(p in q for p in func_kws)
     is_short = len(q.strip()) <= 40

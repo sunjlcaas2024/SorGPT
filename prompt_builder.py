@@ -38,6 +38,65 @@ try:
 except ImportError:
     _DB_AVAILABLE = False
 
+# Knowledge graph (pre-loaded at import time)
+_KG = None
+_KG_AVAILABLE = False
+try:
+    import pickle
+    kg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "knowledge_graph.pkl")
+    if os.path.exists(kg_path):
+        with open(kg_path, "rb") as f:
+            _KG = pickle.load(f)
+        _KG_AVAILABLE = True
+except Exception:
+    pass
+
+
+def _query_kg(user_query: str) -> str:
+    """Query knowledge graph for genes + papers in the query."""
+    kg = _KG
+    if not kg:
+        return ""
+    try:
+        from gene_db_query import _extract_gene_ids
+        gene_ids = _extract_gene_ids(user_query)
+    except Exception:
+        return ""
+    if not gene_ids:
+        return ""
+    lines = []
+    for gid in gene_ids[:3]:
+        if gid not in kg:
+            continue
+        node = kg.nodes[gid]
+        name = node.get("gene_name", "")
+        func = (node.get("function") or "")[:100]
+        lines.append(f"- {gid} ({name}): {func}" if name else f"- {gid}: {func}")
+        # Evidence from known_genes.db
+        paper = node.get("paper")
+        if paper and paper.get("citation"):
+            lines.append(f"  Evidence: {paper['citation'][:150]}")
+        # QTL intervals
+        qtls = []
+        for qid, _, edata in kg.in_edges(gid, data=True):
+            if edata.get("relation") == "contains_gene":
+                q = kg.nodes[qid]
+                qtls.append(f"{qid} ({q.get('trait','')})")
+        if qtls:
+            lines.append(f"  QTLs ({len(qtls)}): {', '.join(qtls[:8])}")
+        # GO terms
+        go_terms = []
+        for _, go_id, edata in kg.out_edges(gid, data=True):
+            if edata.get("relation") == "has_go":
+                go_name = kg.nodes[go_id].get("name", "")
+                if go_name:
+                    go_terms.append(f"{go_id}: {go_name}")
+        if go_terms:
+            lines.append(f"  GO: {'; '.join(go_terms[:5])}")
+        lines.append("")
+    if not lines:
+        return ""
+    return "[KNOWLEDGE_GRAPH]\n" + "\n".join(lines) + "\n"
 
 def _query_db(user_query: str, max_genes: int = 2) -> str:
     if not _DB_AVAILABLE:
@@ -100,17 +159,13 @@ TASK: Answer this specific factual question precisely.
 """,
 
 "gene_function": """\
-TASK: Give a thorough functional account of the sorghum gene(s) in the question.
-Cover the following aspects in a coherent narrative (not a rigid numbered list):
-— Genomic identity: official ID, chromosomal location (BTx623 T2T preferred),
-  gene/protein family, and domain architecture. Use (GeneDB) data where available.
-— Molecular mechanism: biochemical activity, key protein interactions, subcellular localization.
-— In-planta role: which developmental process, stress response, or agronomic trait it controls.
-— Expression context: tissue specificity, developmental stage, or condition-dependent expression
-  if evidence is available.
-— Evolutionary context: ortholog in rice/maize/Arabidopsis and functional conservation.
-— Open questions: explicitly flag what remains unknown.
-Write as a knowledgeable scientist, not a checklist. Cite every factual claim.
+TASK: Answer the user's question about the sorghum gene directly, in the first sentence.
+
+- Sentence 1: give the direct answer — the gene's function, protein family, or its effect on the trait, whichever the question asks.
+- Then elaborate on the specific aspects the question asks about (function, mechanism, effect on height/trait, protein family, expression, orthologs) in plain flowing paragraphs.
+- Focus on what the user asked. Do NOT mechanically cover every possible aspect or write a structured review with headings.
+- Use (GeneDB) data for gene IDs and coordinates where available.
+- Cite every factual claim [n].
 """,
 
 "mechanism": """\
@@ -193,16 +248,13 @@ _TASK_ZH = {
 """,
 
 "gene_function": """\
-任务：对问题中涉及的高粱基因进行全面的功能解析。
-请以连贯叙述（而非僵化编号）覆盖以下要素：
-— 基因身份：官方ID、染色体位置（BTx623 T2T优先）、基因/蛋白家族、
-  结构域架构。优先使用 (GeneDB) 注释。
-— 分子机制：生化活性、关键蛋白互作、亚细胞定位。
-— 植株功能：调控哪个发育过程、胁迫响应或农艺性状。
-— 表达特征：组织特异性、发育阶段或条件依赖性表达（如有证据）。
-— 进化保守性：水稻/玉米/拟南芥同源基因及功能保守情况。
-— 知识缺口：明确指出尚未解决的问题。
-以科学家的视角叙述，不要机械列表。每个论断需引用来源。
+任务：直接回答用户关于高粱基因的问题，第一句就给出答案。
+
+- 第一句：直接给出答案——基因的功能、蛋白家族、或对性状的影响，取决于问题问的是什么。
+- 然后围绕问题实际询问的方面（功能、机制、对株高/性状的影响、蛋白家族、表达、同源基因）用流畅的段落展开。
+- 聚焦用户所问，不要机械地覆盖所有方面，也不要写成带标题的结构化综述。
+- 基因ID和坐标优先用 (GeneDB) 数据。
+- 每个论断需引用来源 [n]。
 """,
 
 "mechanism": """\
@@ -276,6 +328,7 @@ for _d in (_TASK_EN, _TASK_ZH):
 
 _RULES_EN = """\
 RULES:
+• NEVER respond in Chinese. Your ENTIRE response MUST be in English.
 • Cite inline after every factual claim: [1] or [1,2]. Only use the Source index below.
 • Never fabricate citations, gene names, chromosome positions, or statistics.
 • All gene/protein names and locus IDs must stay in English.
@@ -314,6 +367,7 @@ def build_system_prompt(
     # SQLite 基因注释（自动触发）
     db_block = ""
     omics_block = ""
+    kg_block = ""
     if _OMICS_AVAILABLE and _OMICS_HUB:
         try:
             # 主类型查询
@@ -338,6 +392,8 @@ def build_system_prompt(
                 "Structured gene database annotation (BTx623 T2T + HYZ + BTx623v3):\n"
             )
             db_block = header + raw + "\n\n"
+        # Knowledge graph (papers, QTLs, GO)
+        kg_block = _query_kg(user_query)
 
     task_map = _TASK_ZH if lang == "chinese" else _TASK_EN
     task_instr = task_map.get(query_type, task_map["unknown"])
@@ -346,11 +402,12 @@ def build_system_prompt(
 
     if lang == "chinese":
         system_prompt = (
-            "你是 SorGPT，世界顶级高粱（Sorghum bicolor）基因组学、遗传学、"
-            "分子生物学与育种专家。你对高粱基因功能、QTL/GWAS、转录组学及与"
-            "玉米、水稻等禾本科作物的比较基因组学有深入了解。\n\n"
+            "你是 SorGPT，高粱AI智能问答助手，基于高粱科研文献知识库。你熟悉高粱"
+            "基因功能、QTL/GWAS、转录组学"
+            "以及与玉米、水稻等禾本科作物的比较基因组学。\n\n"
             f"{task_instr}\n{rules}\n{SEP}\n"
             f"{db_block}"
+            f"{kg_block}"
             f"{omics_block}"
             f"来源索引：\n{src_hint}\n\n"
             f"研究片段：\n{evidence_text}\n"
@@ -358,13 +415,15 @@ def build_system_prompt(
         )
     else:
         system_prompt = (
-            "You are SorGPT, a world-class expert in sorghum (Sorghum bicolor) "
-            "genomics, genetics, molecular biology, and breeding.\n\n"
+            "You are SorGPT, an AI-powered Q&A assistant for sorghum research literature (Sorghum bicolor) "
+            "CRITICAL: You MUST respond in English. Never output Chinese. You are knowledgeable about sorghum gene function, QTL/GWAS, transcriptomics, and comparative genomics with cereal crops.\n\n"
             f"{task_instr}\n{rules}\n{SEP}\n"
             f"{db_block}"
+            f"{kg_block}"
             f"{omics_block}"
             f"Source index:\n{src_hint}\n\n"
             f"Research snippets:\n{evidence_text}\n"
+            f"\n**REMINDER: Answer in English only.**\n"
             f"{SEP}\n\nAnswer the user's question following the task instructions."
         )
 
