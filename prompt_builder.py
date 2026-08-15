@@ -196,6 +196,9 @@ If the question asks whether a technology or research area EXISTS in sorghum:
   laser microdissection) as the closest relevant context.
 — Do not conflate "not in the provided literature" with "does not exist globally";
   acknowledge the limitation of the provided reference set explicitly.
+If the question asks which papers/studies report, describe, or investigate X:
+— List the relevant papers explicitly (first author, year, journal, one-line finding), each cited [n].
+— Do NOT synthesize thematically; the user wants the specific papers.
 For general review questions: synthesize thematically across sources (not paper-by-paper);
 identify dominant gene families, key open questions, and comparison with other cereals.
 Cite every factual claim.
@@ -283,6 +286,9 @@ _TASK_ZH = {
 — 然后描述现有最接近的内容（如bulk RNA-seq、激光显微切割等）。
 — 不要把"提供的文献中没有"等同于"全球范围不存在"；
   明确说明所提供参考集的局限性。
+如果问题询问哪些论文/研究报告、描述或调查了X：
+— 明确列出相关论文（第一作者、年份、期刊、一句话结论），每篇标注引用 [n]。
+— 不要按主题综合；用户需要的是具体的论文。
 对于一般综述问题：按主题而非逐篇综合来源；
 识别主导基因家族、关键开放问题，并与其他禾本科作物比较。
 每个论断需引用来源。
