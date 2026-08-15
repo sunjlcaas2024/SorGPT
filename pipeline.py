@@ -218,19 +218,35 @@ class SorghumRAGPipeline:
     def _format_locate_answer(self, meta_hits: List[MetaPaper]) -> str:
         if not meta_hits:
             return "未检索到匹配文章。"
-        best = meta_hits[0]
+
+        # 用 citation_map 补全年份/期刊/DOI（元数据索引的 year 字段可能为空）
+        def _enrich(hit: MetaPaper) -> Dict[str, str]:
+            info = safe_get_ref_info(hit.filename, self.citation_map)
+            year = norm_text(hit.year or info.get("year", ""))
+            if year.endswith(".0"):
+                year = year[:-2]
+            return {
+                "title": hit.title or info.get("title", "") or "未提供",
+                "authors": hit.authors or info.get("authors", "") or "未提供",
+                "journal": hit.journal or info.get("journal", "") or "未提供",
+                "year": year or "未提供",
+                "doi": hit.doi or info.get("doi", "") or "未提供",
+            }
+
+        best = _enrich(meta_hits[0])
         lines = [
             "最可能对应的文章：",
-            f"题目：{best.title or '未提供'}",
-            f"作者：{best.authors or '未提供'}",
-            f"期刊：{best.journal or '未提供'} ({best.year or '未提供'})",
-            f"DOI：{best.doi or '未提供'}",
+            f"题目：{best['title']}",
+            f"作者：{best['authors']}",
+            f"期刊：{best['journal']} ({best['year']})",
+            f"DOI：{best['doi']}",
         ]
         if len(meta_hits) > 1:
             lines.append("")
             lines.append("备选候选：")
             for i, p in enumerate(meta_hits[1:4], 2):
-                lines.append(f"{i}. {p.title} | {p.journal} ({p.year})")
+                e = _enrich(p)
+                lines.append(f"{i}. {e['title']} | {e['journal']} ({e['year']})")
         return "\n".join(lines)
 
     def _format_boundary_answer(self, user_query: str) -> str:
