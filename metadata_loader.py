@@ -25,9 +25,17 @@ _EN_ABSTRACT_COLS = ["Abstract", "AB", "abstract", "摘要", "文摘", "文　�
 _EN_KEYWORDS_COLS = ["Author Keywords", "Keywords", "DE", "ID", "keywords",
                      "关键字", "关键词", "Keywords Plus"]
 _EN_DOI_COLS      = ["DOI", "doi", "DI", "DOI Link"]
-_EN_YEAR_COLS     = ["Publication Year", "Year", "PY", "publication year", "发表年", "年", "出版年"]
+_EN_YEAR_COLS     = ["Publication Year", "Year", "PY", "publication year", "发表年", "年", "出版年", "year"]
 _EN_JOURNAL_COLS  = ["Source Title", "Journal", "SO", "source title", "journal",
                      "刊名", "刊　名", "期刊名称", "来源刊名"]
+
+# 无关中文期刊过滤名单（电影/生活/农业推广类，非高粱科研文献）。
+# 同时被 citation_map 构建（metadata_loader）与元数据检索（retriever）使用。
+ZH_SKIP_JOURNALS = {
+    "电影评介", "电影文学", "大众电影", "当代电影",
+    "农村百事通", "农村新技术", "农村科学实验", "农村科技",
+    "现代农业科技", "现代农村科技", "新农业", "农技服务", "农业机械",
+}
 
 
 def read_csv_robust(csv_path: str) -> pd.DataFrame:
@@ -100,8 +108,7 @@ def load_citation_map(csv_paths: List[str]) -> Dict[str, Dict[str, str]]:
     """
     citation_map: Dict[str, Dict[str, str]] = {}
 
-    # v3: filter irrelevant Chinese journals
-    _zh_skip = {'电影评介','电影文学','大众电影','当代电影','农村百事通','农村新技术','农村科学实验','农村科技','现代农业科技','现代农村科技','新农业','农技服务','农业机械'}
+    # 无关中文期刊在此跳过（名单见模块级 ZH_SKIP_JOURNALS）
     _skipped = 0
 
     for csv_path in csv_paths:
@@ -137,7 +144,11 @@ def load_citation_map(csv_paths: List[str]) -> Dict[str, Dict[str, str]]:
             keywords = pick(row, _EN_KEYWORDS_COLS)
             doi      = normalize_doi(pick(row, _EN_DOI_COLS))
             year     = pick(row, _EN_YEAR_COLS)
+            url      = pick(row, ["url", "URL"])
             journal  = title_case(pick(row, _EN_JOURNAL_COLS))
+            if journal in ZH_SKIP_JOURNALS:
+                _skipped += 1
+                continue
 
             info = {
                 "authors":     format_authors(authors_raw),
@@ -146,6 +157,7 @@ def load_citation_map(csv_paths: List[str]) -> Dict[str, Dict[str, str]]:
                 "abstract":    abstract,
                 "keywords":    keywords,
                 "doi":         doi,
+                "url":         url,
                 "year":        year,
                 "journal":     journal,
             }

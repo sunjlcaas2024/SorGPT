@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import json
 """
 retriever.py
 ========================
@@ -28,7 +29,9 @@ from config import (
     COUNT_QUERY_FETCH_K, QUERY_TYPE_TO_INDEXES,
     DEFAULT_NPROBE, USE_FAISS_GPU, GPU_DEVICE
 )
+import json
 from utils import basename_lower, norm_text
+from metadata_loader import ZH_SKIP_JOURNALS
 from embeddings import BgeEmbeddingsWrapper
 
 # BM25 scorer - lazy loaded
@@ -83,6 +86,15 @@ class Retriever:
                  citation_map: Dict[str, Dict[str, str]]):
         self.embed_model = embed_model
         self.citation_map = citation_map
+        # Load gene→paper index for metadata enrichment
+        _gi_path = os.path.join(os.path.dirname(__file__), "gene_index.json")
+        self.gene_index = {}
+        if os.path.exists(_gi_path):
+            try:
+                with open(_gi_path) as _f:
+                    self.gene_index = json.load(_f)
+            except Exception:
+                pass
 
         # 加载元数据索引（保持原来的 LangChain 检索方式，库小，CPU 足够）
         self.meta_dbs = {
@@ -165,6 +177,9 @@ class Retriever:
             results = db.similarity_search_with_score(hybrid_query, k=k)
             for doc, score in results:
                 md = doc.metadata or {}
+                # 无关中文期刊（电影/生活/农业推广类）不入检索池
+                if md.get("journal") in ZH_SKIP_JOURNALS:
+                    continue
                 fname = norm_text(md.get("filename", "")) or norm_text(md.get("source", ""))
                 uniq = basename_lower(fname) or md.get("title", "")
                 if uniq in seen:
@@ -183,6 +198,39 @@ class Retriever:
                 ))
 
         papers.sort(key=lambda x: x.score)
+        papers = papers[:k]
+
+        # Gene index lookup: if query contains gene symbols, inject
+        # matching papers from the gene index directly into the pool
+        _gk = []
+        for _w in user_query.replace(",", " ").replace("?", " ").split():
+            _w = _w.strip('?!.,()[]{}"' + "'")
+            if not _w: continue
+            if "Sobic." in _w or "SbiHYZ." in _w:
+                _gk.append(_w)
+            elif len(_w) >= 3 and _w[0].isupper() and any(x.isupper() for x in _w[1:]):
+                _gk.append(_w)
+        if _gk and self.gene_index:
+            _seen = {basename_lower(p.filename) or p.title for p in papers}
+            for _paper_key, _gene_map in self.gene_index.items():
+                _match = False
+                for _g in _gk:
+                    if _g in _gene_map or _g.lower() in str(_gene_map).lower():
+                        _match = True
+                        break
+                if not _match: continue
+                if _paper_key in _seen: continue
+                _seen.add(_paper_key)
+                # Create a MetaPaper with gene info in the title for downstream
+                _gene_str = "; ".join(f"{k}={v}" for k, v in list(_gene_map.items())[:5])
+                papers.append(MetaPaper(
+                    filename=_paper_key,
+                    title=f"[GeneIndex] {_gene_str}",
+                    authors="", journal="", year="", doi="",
+                    score=0.1,  # good score to rank well
+                    meta_text=f"Gene index match: {_gene_str}",
+                    lang="en"))
+
         return papers[:k]
 
     def choose_indexes(self, query_type: str) -> List[str]:

@@ -79,6 +79,14 @@ COUNT_QUERY_FETCH_K  = 300
 COUNT_QUERY_MAX_SHOW = 200
 
 # -----------------------------
+# 基因序列展示 (sequence 类型)
+# -----------------------------
+SEQ_PREVIEW_BP      = 60      # 核苷酸序列预览长度(bp)
+SEQ_PREVIEW_AA      = 30      # 蛋白序列预览长度(aa)
+GET_SEQ_URL         = "http://127.0.0.1:8001/glapi/mongo/get-seq/"
+SEQ_SYMBOL_MAP_PATH = os.path.join(_THIS_DIR, "gene_symbol_map.json")
+
+# -----------------------------
 # FAISS 运行参数
 # -----------------------------
 DEFAULT_NPROBE = 256
@@ -98,6 +106,7 @@ REFERENCE_LIMITS = {
     "gene_list":    15,
     "count":        20,
     "boundary":     0,
+    "sequence":     6,
 }
 
 # -----------------------------
@@ -113,6 +122,7 @@ EVIDENCE_LIMITS = {
     "gene_list":    24,
     "count":        0,
     "boundary":     0,
+    "sequence":     12,
 }
 
 # -----------------------------
@@ -128,6 +138,7 @@ QUERY_TYPE_TO_INDEXES = {
     "locate":       [],
     "count":        [],
     "boundary":     [],
+    "sequence":     ["en_fine", "en_std", "zh_fine", "zh_std"],
 }
 
 # -----------------------------

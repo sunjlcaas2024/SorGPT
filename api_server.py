@@ -21,6 +21,7 @@ import uvicorn
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pipeline import SorghumRAGPipeline
 from config import *
+import sequence_fetcher
 
 # ============== 全局共享的 RAG 管道 ==============
 # 修复：只创建一次全局管道，所有用户共享
@@ -69,6 +70,10 @@ def verify_api_key(api_key: str) -> Optional[UserSession]:
 class QuestionRequest(BaseModel):
     question: str
     stream: bool = False
+
+class SequenceRequest(BaseModel):
+    geneid: str
+    type: str = "dna"
 
 class QuestionResponse(BaseModel):
     query: str
@@ -235,6 +240,14 @@ async def ask_question_stream(request: QuestionRequest, session: UserSession = D
                 "Cache-Control": "no-cache, no-transform",
             }
         )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"处理失败: {str(e)}")
+
+@app.post("/sequence")
+async def get_gene_sequence(request: SequenceRequest, session: UserSession = Depends(get_current_user)):
+    """基因序列代理端点：符号自动解析 → get-seq → 返回序列。"""
+    try:
+        return sequence_fetcher.fetch_and_format(request.geneid, request.type)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"处理失败: {str(e)}")
 

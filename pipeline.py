@@ -22,7 +22,7 @@ pipeline.py
 import re
 import json
 import os
-from typing import Dict, Any, List, Iterator
+from typing import Dict, Any, List, Iterator, Tuple
 from config import CSV_PATHS, REFERENCE_LIMITS, COUNT_QUERY_MAX_SHOW
 from embeddings import BgeEmbeddingsWrapper
 from metadata_loader import load_citation_map, safe_get_ref_info
@@ -31,6 +31,7 @@ from retriever import Retriever, MetaPaper, ChunkHit
 from reranker import Reranker
 from prompt_builder import build_system_prompt
 from generator import AnswerGenerator
+from sequence_fetcher import resolve_genes_from_query, build_sequence_blocks, detect_seq_type
 from utils import build_citation_string, norm_text
 
 # -----------------------------
@@ -283,11 +284,44 @@ class SorghumRAGPipeline:
         for _, info in sorted_items:
             fname = info["fname"]
             idx   = info["idx"]
-            ref   = safe_get_ref_info(fname, self.citation_map)
-            ref_lines.append(build_citation_string(ref, idx, fname))
+            ref  = safe_get_ref_info(fname, self.citation_map)
+            line = build_citation_string(ref, idx, fname)
+            if line.strip():
+                ref_lines.append(line)
 
         return ref_lines
 
+    def _sequence_blocks(self, user_query: str) -> Tuple[str, str]:
+        """sequence 类型：解析基因 → 返回 (prompt上下文, 追加序列块)。
+
+        上下文注入 system prompt 让 LLM 序言采用正确 ID；序列块在生成后追加，
+        保证输出序列真实、不被模型改写。
+        """
+        try:
+            gene_ids = resolve_genes_from_query(user_query)
+        except Exception:
+            return "", ""
+        if not gene_ids:
+            return "", ""
+        seq_type = detect_seq_type(user_query)
+        lang = "chinese" if sum(1 for c in user_query if ord("一") <= ord(c) <= ord("鿿")) > 0 else "english"
+        ctx_lines, blocks = [], []
+        for gid in gene_ids:
+            try:
+                c, b = build_sequence_blocks(gid, seq_type=seq_type, lang=lang)
+            except Exception:
+                c, b = "", ""
+            if c:
+                ctx_lines.append("- " + c)
+            if b:
+                blocks.append(b)
+        if not blocks:
+            return "", ""
+        ctx = ""
+        if ctx_lines:
+            header = "解析出的基因：\n" if lang == "chinese" else "Resolved gene(s):\n"
+            ctx = header + "\n".join(ctx_lines)
+        return ctx, "\n\n" + "\n\n".join(blocks)
     def _rule_subtopics(self, query: str, en_keywords: str) -> List[str]:
         """
         规则拆分子主题，替代大模型子主题分解。
@@ -377,8 +411,12 @@ class SorghumRAGPipeline:
         reranked = self.reranker.rerank(chunk_hits, query_type)
         # 10. 多源去重 + 裁剪
         selected_hits = self.reranker.diversify_and_trim(reranked, query_type)
+        # 10b. 序列解析（sequence 类型提前解析，避免"证据不足"早退并修正 ID）
+        seq_ctx, seq_block = "", ""
+        if query_type == "sequence":
+            seq_ctx, seq_block = self._sequence_blocks(user_query)
         # 11. 证据不足
-        if not selected_hits:
+        if not selected_hits and not seq_block:
             chinese_char_count = sum(1 for c in user_query if '\u4e00' <= c <= '\u9fff')
             no_evidence_msg = (
                 "未检索到足够的全文证据，现有检索证据有限。"
@@ -396,7 +434,7 @@ class SorghumRAGPipeline:
             }
         # 12. 构建 system prompt
         system_prompt, protected_map, source_index = build_system_prompt(
-            user_query, query_type, selected_hits, extra_types=extra_types
+            user_query, query_type, selected_hits, extra_types=extra_types, seq_context=seq_ctx
         )
         print("\n" + "=" * 60)
         extra_str = f" + {extra_types}" if extra_types else ""
@@ -407,6 +445,10 @@ class SorghumRAGPipeline:
         answer = self.generator.generate(
             user_query, system_prompt, protected_map, enable_thinking=False
         )
+        # 13b. 序列注入（sequence 类型）
+        if query_type == "sequence":
+            if seq_block:
+                answer = answer + seq_block
         # 14. 参考文献（每条文献后紧跟对应证据片段）
         references = self._build_reference_list(source_index, selected_hits, query_type)
         return {
@@ -474,8 +516,12 @@ class SorghumRAGPipeline:
         reranked = self.reranker.rerank(chunk_hits, query_type)
         # 10. 多源去重 + 裁剪
         selected_hits = self.reranker.diversify_and_trim(reranked, query_type)
+        # 10b. 序列解析（sequence 类型提前解析，避免"证据不足"早退并修正 ID）
+        seq_ctx, seq_block = "", ""
+        if query_type == "sequence":
+            seq_ctx, seq_block = self._sequence_blocks(user_query)
         # 11. 证据不足
-        if not selected_hits:
+        if not selected_hits and not seq_block:
             chinese_char_count = sum(1 for c in user_query if ord("一") <= ord(c) <= ord("鿿"))
             no_evidence_msg = (
                 "未检索到足够的全文证据，现有检索证据有限。"
@@ -487,7 +533,7 @@ class SorghumRAGPipeline:
 
         # 12. 构建 system prompt
         system_prompt, protected_map, source_index = build_system_prompt(
-            user_query, query_type, selected_hits, extra_types=extra_types
+            user_query, query_type, selected_hits, extra_types=extra_types, seq_context=seq_ctx
         )
 
         # 13. 流式生成答案
@@ -495,6 +541,11 @@ class SorghumRAGPipeline:
             user_query, system_prompt, protected_map, enable_thinking=False
         ):
             yield chunk
+
+        # 13b. 序列注入（sequence 类型）
+        if query_type == "sequence":
+            if seq_block:
+                yield seq_block
 
         # 14. 流结束后返回元数据（包含参考文献等）
         references = self._build_reference_list(source_index, selected_hits, query_type)

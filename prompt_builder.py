@@ -234,6 +234,15 @@ TASK: This question falls outside the sorghum literature knowledge base.
 Politely explain why, and specify what kinds of questions this system handles well.
 Do not answer using general knowledge.
 """,
+
+"sequence": """\
+TASK: Answer a question about a gene's sequence (nucleotide / CDS / protein) in sorghum.
+• Identify the gene and give its official Sobic.xxxGxxxxxx ID in 1-2 sentences (name, locus, function). Use the exact Sobic ID from the "Resolved gene(s)" section below — do NOT guess a different ID.
+• State which sequence type the user asked for (DNA / CDS / protein), and lead into it (e.g. "The sequence is:").
+• If the "Resolved gene(s)" section below is present, the exact sequence is appended automatically at the very end of your answer — do NOT write it yourself, and do NOT claim the sequence is unavailable or that the evidence is insufficient.
+• If no gene was resolved (the "Resolved gene(s)" section is empty), state plainly that the gene could not be resolved to a specific locus, and do NOT output or promise any sequence.
+• Keep under 120 words.
+""",
 }
 
 # ════════════════════════════════════════════════════════════════
@@ -322,6 +331,15 @@ _TASK_ZH = {
 任务：该问题超出高粱文献知识库范围。礼貌解释原因并说明本系统适合的问题类型。
 不要用通用知识作答。
 """,
+
+"sequence": """\
+任务：回答关于高粱基因序列（核苷酸 / CDS / 蛋白）的问题。
+• 用1-2句说明基因的官方 Sobic.xxxGxxxxxx ID、名称/位置和功能。使用下方「解析出的基因」中给出的确切 Sobic ID，不要猜测不同的 ID。
+• 说明用户所问的序列类型（DNA / CDS / 蛋白），并引出序列（如"序列如下："）。
+• 若下方有「解析出的基因」段落，正确序列会自动附加在你回答的最末尾——不要自己写，也不要声称序列不可用或"证据不足"。
+• 若未解析到基因（下方无「解析出的基因」段落），请说明无法将该符号/基因解析到具体位点，不要输出或承诺任何序列。
+• 字数控制在150字以内。
+""",
 }
 
 for _d in (_TASK_EN, _TASK_ZH):
@@ -364,6 +382,7 @@ def build_system_prompt(
     query_type: str,
     evidence_hits: List[ChunkHit],
     extra_types: List[str] = None,
+    seq_context: str = "",
 ) -> Tuple[str, Dict[str, str], Dict[str, Dict[str, str]]]:
     source_index = build_source_index(evidence_hits)
     evidence_text, merged_protected = _evidence_block(evidence_hits, source_index)
@@ -406,6 +425,10 @@ def build_system_prompt(
     rules = _RULES_ZH if lang == "chinese" else _RULES_EN
     SEP = "=" * 60
 
+    seq_block_text = ""
+    if seq_context:
+        seq_block_text = seq_context + "\n"
+
     if lang == "chinese":
         system_prompt = (
             "你是 SorGPT，高粱AI智能问答助手，基于高粱科研文献知识库。你熟悉高粱"
@@ -417,6 +440,7 @@ def build_system_prompt(
             f"{omics_block}"
             f"来源索引：\n{src_hint}\n\n"
             f"研究片段：\n{evidence_text}\n"
+            f"{seq_block_text}"
             f"{SEP}\n\n请按任务要求回答用户问题。"
         )
     else:
@@ -429,6 +453,7 @@ def build_system_prompt(
             f"{omics_block}"
             f"Source index:\n{src_hint}\n\n"
             f"Research snippets:\n{evidence_text}\n"
+            f"{seq_block_text}"
             f"\n**REMINDER: Answer in English only.**\n"
             f"{SEP}\n\nAnswer the user's question following the task instructions."
         )

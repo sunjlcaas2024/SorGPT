@@ -150,7 +150,8 @@ def format_authors(authors_raw: str) -> str:
             out.append(p)
     formatted = "; ".join(out)
     if len(parts) > 6:
-        formatted += " et al."
+        _has_cn = any("\u4e00" <= c <= "\u9fff" for c in authors_raw)
+        formatted += " 等" if _has_cn else " et al."
     return formatted
 def get_journal_score(journal: str) -> float:
     """
@@ -458,6 +459,7 @@ def build_citation_string(ref_info: Dict[str, str], index: int, source_fname: st
     year = norm_text(ref_info.get("year", "")).rstrip(".0") if ".0" in norm_text(ref_info.get("year", "")) else norm_text(ref_info.get("year", ""))
     journal = norm_text(ref_info.get("journal", ""))
     doi = normalize_doi(ref_info.get("doi", ""))
+    url = norm_text(ref_info.get("url", ""))
     parts = [f"[{index}]"]
     if authors:
         parts.append(authors)
@@ -466,7 +468,9 @@ def build_citation_string(ref_info: Dict[str, str], index: int, source_fname: st
     if title:
         parts.append(f"{title}.")
     if journal:
-        parts.append(f"{journal}.")
+        parts.append(f"*{journal}*.")
     if doi:
         parts.append(f"DOI: [{doi}](https://doi.org/{doi})")
+    elif url:
+        parts.append(f"[来源链接]({url})")
     return " ".join(parts)

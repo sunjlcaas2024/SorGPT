@@ -40,7 +40,7 @@ class AnswerGenerator:
                 } if enable_thinking else {},
             )
             is_thinking = True
-            print("\n" + "=" * 20 + " 深度思考过程 " + "=" * 20)
+            print("\n" + "=" * 20 + " Reasoning Process " + "=" * 20)
             for chunk in stream:
                 delta = chunk.choices[0].delta
                 # 打印思考过程
@@ -49,7 +49,7 @@ class AnswerGenerator:
                 # 打印最终回答
                 elif hasattr(delta, "content") and delta.content:
                     if is_thinking:
-                        print("\n" + "=" * 20 + " 最终结论 " + "=" * 20)
+                        print("\n" + "=" * 20 + " Final Answer " + "=" * 20)
                         is_thinking = False
                     print(delta.content, end="", flush=True)
                     full_content += delta.content
@@ -64,7 +64,7 @@ class AnswerGenerator:
 
         输出格式:
         - 思考内容: 直接yield，无前缀
-        - 分隔标记: ===== 思考过程结束 =====
+        - 分隔标记: ===== End of reasoning =====
         - 最终内容: 直接yield，无前缀
         """
         try:
@@ -97,7 +97,7 @@ class AnswerGenerator:
                     if in_thinking:
                         # 思考阶段结束，输出分隔标记
                         in_thinking = False
-                        yield "\n\n==================== 思考过程结束 ====================\n\n"
+                        yield "\n\n==================== End of reasoning ====================\n\n"
                     full_content += delta.content
                     yield delta.content
 

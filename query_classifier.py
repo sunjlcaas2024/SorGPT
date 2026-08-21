@@ -58,10 +58,27 @@ _DB_ID_RE = re.compile(
 )
 
 def _has_gene(q: str) -> bool:
-    return bool(_GENE_RE.search(q))
+    return bool(_GENE_RE.search(q)) or _has_symbol(q)
 
 def _has_db_id(q: str) -> bool:
     return bool(_DB_ID_RE.search(q))
+
+# ── 基因符号（gene_symbol_map.json，长度≥4，含 SbCYP79A1/SbMATE 等文献符号）──
+_SYMBOL_KEYS = []
+try:
+    _sm = _load_json("gene_symbol_map.json")
+    _SYMBOL_KEYS = sorted(
+        [k for k in _sm.keys() if isinstance(k, str) and len(k) >= 4],
+        key=len, reverse=True,
+    )
+except Exception:
+    _SYMBOL_KEYS = []
+
+def _has_symbol(q: str) -> bool:
+    for s in _SYMBOL_KEYS:
+        if re.search(r"(?<![a-zA-Z0-9])" + re.escape(s) + r"(?![a-zA-Z0-9])", q, re.IGNORECASE):
+            return True
+    return False
 
 # ── 基因名 → 检索词注入 ──────────────────────────────────────────
 _GENE_CTX = {
@@ -257,6 +274,18 @@ def _is_mechanism(q): return any(p in q for p in [
     "how does","why does","what happens",
 ])
 
+def _is_sequence(q, q_orig):
+    """基因序列类问题：需同时命中序列关键词 + 基因标识。"""
+    if not _has_gene(q_orig):
+        return False
+    return any(p in q for p in [
+        "核苷酸序列","核苷酸","核酸序列","基因序列","dna序列","cds序列","编码序列",
+        "蛋白序列","蛋白质序列","氨基酸序列",
+        "nucleotide sequence","dna sequence","gene sequence","cds sequence",
+        "coding sequence","protein sequence","amino acid sequence","peptide sequence",
+        "cds","cdna",  # 裸缩写：Extract the CDS of SbTFL1 / "CDS 序列"(含空格)
+    ])
+
 
 # ═══════════════════════════════════════════════════════════════
 # 主函数：多标签路由
@@ -301,6 +330,7 @@ def classify_query_type(query: str) -> Tuple[str, List[str], str]:
     if _is_review(q):           tags.add("review")
     if _is_gene_list(q):        tags.add("gene_list")
     if _is_mechanism(q):        tags.add("mechanism")
+    if _is_sequence(q, q_orig): tags.add("sequence")
     if _has_gene(q_orig) and not tags:
         tags.add("gene_function")
 
@@ -316,12 +346,17 @@ def classify_query_type(query: str) -> Tuple[str, List[str], str]:
     elif locate_strong:
         tags.add("locate")
 
+    # ── sequence 独占：序列问题不追加其他检索 ────────────────────
+    if "sequence" in tags:
+        tags = {"sequence"}
+
     # ── 无标签兜底 ──────────────────────────────────────────────
     if not tags:
         tags.add("review")  # v2: changed from mechanism to review (less aggressive default)
 
     # ── 主类型优先级（从高到低）─────────────────────────────────
     PRIMARY_ORDER = [
+        "sequence",      # 基因序列
         "factoid",       # 有明确数量/位置答案
         "gene_function", # 基因功能解析
         "qtl_gwas",      # 遗传定位

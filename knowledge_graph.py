@@ -177,6 +177,11 @@ def build_graph():
     has_known = sum(1 for n in G.nodes if G.nodes[n].get("known"))
     print(f"{len(rows)} known genes annotated, {has_known} matched to graph")
 
+    # Store evidence as paper reference on gene nodes (direct from known_genes.db)
+    for gid, gdata in G.nodes(data=True):
+        if gdata.get("type") == "gene" and gdata.get("known") and gdata.get("evidence"):
+            G.nodes[gid]["paper"] = {"citation": gdata["evidence"][:200]}
+
     # ============================================================
     # 9. Paper nodes from publication CSV + citation counts
     # ============================================================
