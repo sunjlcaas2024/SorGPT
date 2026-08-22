@@ -173,8 +173,16 @@ class Retriever:
         papers: List[MetaPaper] = []
         seen = set()
 
+        # zh-v2: 判断查询语言。中文问题时英文 meta 索引加配额，扩大 allowed 英文文献池，
+        # 供全文检索补充英文证据（株高/基础科学类中文语料不足）。
+        _cn_chars = sum(1 for c in user_query if "一" <= c <= "鿿")
+        _is_cn = _cn_chars / max(len(user_query), 1) > 0.15
+
         for lang, db in self.meta_dbs.items():
-            results = db.similarity_search_with_score(hybrid_query, k=k)
+            _k = k
+            if _is_cn and lang == "english":
+                _k = max(k, k * 2)  # 英文 meta 多取，扩大英文候选
+            results = db.similarity_search_with_score(hybrid_query, k=_k)
             for doc, score in results:
                 md = doc.metadata or {}
                 # 无关中文期刊（电影/生活/农业推广类）不入检索池
@@ -197,8 +205,17 @@ class Retriever:
                     lang=lang,
                 ))
 
-        papers.sort(key=lambda x: x.score)
-        papers = papers[:k]
+        if _is_cn:
+            # zh-v2: 中文问题按语言配额保底：英文 meta 直接保底进池（不参与全局排序淘汰），
+            # 避免被中文分数挤掉，确保 allowed 池含足够英文文献供全文补充。
+            _en = sorted((p for p in papers if p.lang == "english"),
+                         key=lambda x: x.score)[: max(k // 3, 80)]
+            _zh = sorted((p for p in papers if p.lang == "chinese"),
+                         key=lambda x: x.score)[: k]
+            papers = _en + _zh
+        else:
+            papers.sort(key=lambda x: x.score)
+            papers = papers[:k]
 
         # Gene index lookup: if query contains gene symbols, inject
         # matching papers from the gene index directly into the pool

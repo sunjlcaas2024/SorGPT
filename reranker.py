@@ -286,4 +286,17 @@ class Reranker:
             if len(selected) >= limit:
                 break
 
+        # zh-v2: 中文问题保底英文证据 —— 中文语料对株高/基础科学类证据不足，
+        # 避免最终池被泛匹配中文文献稀释，确保英文 hits 至少 EN_MIN 个进入。
+        if any(h.lang == "zh" for h in hits) and query_type in ("gene_list", "count", "review"):
+            EN_MIN = 10
+            if sum(1 for h in selected if h.lang == "en") < EN_MIN:
+                _chosen = {basename_lower(h.source) for h in selected}
+                for h in hits:  # hits 已按 final_score 排序
+                    if h.lang == "en" and basename_lower(h.source) not in _chosen:
+                        selected.append(h)
+                        _chosen.add(basename_lower(h.source))
+                        if sum(1 for x in selected if x.lang == "en") >= EN_MIN:
+                            break
+
         return selected
