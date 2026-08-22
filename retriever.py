@@ -300,7 +300,11 @@ class Retriever:
         chinese_chars = sum(1 for c in user_query if "一" <= c <= "鿿")
         is_cn = chinese_chars / max(len(user_query), 1) > 0.15
         if is_cn:
-            chosen_indexes = [i for i in chosen_indexes if i.startswith("zh_")]
+            # zh-v1: 中文问题以中文索引为主，英文索引自动补充（以事实为主）。
+            # 英文补充索引用较小 K，避免英文 chunk 淹没中文证据。
+            zh_ = [i for i in chosen_indexes if i.startswith("zh_")]
+            en_ = [i for i in chosen_indexes if i.startswith("en_")]
+            chosen_indexes = zh_ + en_
         else:
             chosen_indexes = [i for i in chosen_indexes if i.startswith("en_")]
         # 确保至少有一个索引被选中（fallback）
@@ -315,7 +319,11 @@ class Retriever:
             store = loaded["store"]
             index = loaded["gpu_index"] if loaded["using_gpu"] and loaded["gpu_index"] is not None else loaded["cpu_index"]
 
-            scores, ids = index.search(query_vec, TOP_CHUNK_K * _dynamic_mult)
+            # zh-v1: 混合检索时，英文补充索引只搜 TOP_CHUNK_K 个候选
+            _search_k = TOP_CHUNK_K * _dynamic_mult
+            if is_cn and index_name.startswith("en_"):
+                _search_k = TOP_CHUNK_K
+            scores, ids = index.search(query_vec, _search_k)
 
             granularity = index_name.split("_")[-1]   # fine / std / large / para
             lang = index_name.split("_")[0]           # en
@@ -374,7 +382,11 @@ class Retriever:
                 seen.add(snippet_key)
 
                 # [v2] BM25 lexical scoring (IDF-weighted)
-                lexical = self._bm25_score(hybrid_query, doc.page_content)
+                # zh-v1: 中文混合池统一用向量相似度（lexical=0）：
+                #   BM25 tokenize 会把 CJK 字符替换为空格而失效，中文 chunk 只残留英文
+                #   token，与英文关键词匹配是噪声；且中英 BM25 尺度不一致会破坏混合池排序。
+                # 英文路径(is_cn=False)保持 BM25 不变。
+                lexical = 0.0 if is_cn else self._bm25_score(hybrid_query, doc.page_content)
 
                 # FAISS index.search returns cosine similarity, higher = better.
                 # Negate to fit “smaller = better” sort convention.

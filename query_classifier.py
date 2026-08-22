@@ -383,7 +383,12 @@ def classify_query_type(query: str) -> Tuple[str, List[str], str]:
         "gwas", "qtl", "haplotype", "单倍型", "连锁不平衡",
         "gwas和单倍型", "gwas 和", "gwas结果",
     ])
-    intro_words = any(p in q for p in ["介绍","相关基因的","相关基因"])
+    intro_words = any(p in q for p in [
+        "介绍","相关基因的","相关基因",
+        # zh-v1: 中文 QTL/定位问题（"QTL有哪些/分布在哪些染色体/PVE"）也可升级到 qtl_gwas，
+        # 避免被 _is_gene_list("有哪些") 抢为主类型导致证据配置偏浅。
+        "有哪些", "分布在", "染色体", "pve",
+    ])
     if gwas_dominant and intro_words and "qtl_gwas" in tags:
         primary = "qtl_gwas"
         extra   = [t for t in sorted(tags - {"qtl_gwas"})]
