@@ -16,9 +16,56 @@ SorGPT 基因注释查询接口层。
 import sqlite3
 import re
 import os
+import json
 from typing import Optional, Dict, List, Tuple
 
 GENE_DB = os.path.join(os.path.dirname(__file__), '../db/sorghum_genes.db')
+
+# ── 符号 → Sobic ID 权威映射（zh-v3：合并 gene_symbol_map.json，JSON 优先）─────
+def _load_symbol_map():
+    """基因符号→Sobic ID 映射。gene_symbol_map.json 优先，硬编码兜底。"""
+    _m = {
+        "AT1": "Sobic.001G341700", "SbAT1": "Sobic.001G341700",
+        "SH1": "Sobic.001G152901",
+        "AltSB": "Sobic.003G403000",
+        "ARG1": "Sobic.007G085350",
+        "DW3": "Sobic.007G163800", "SbDW3": "Sobic.007G163800",
+        "DW1": "Sobic.009G229800", "SbDW1": "Sobic.009G229800",
+        "DW2": "Sobic.006G067700", "SbDW2": "Sobic.006G067700",
+        "MA1": "Sobic.006G057600", "SbMA1": "Sobic.006G057600",
+        "MA2": "Sobic.006G095600",
+        "MA3": "Sobic.010G230100",
+        "TB1": "Sobic.001G121200", "SbTB1": "Sobic.001G121200",
+        "BY1": "Sobic.002G379600",
+        "GC1": "Sobic.010G022600",
+        "Y1": "Sobic.006G030400",
+        "Tan1": "Sobic.004G280200",
+        "B1": "Sobic.004G071000",
+        "RCN1": "Sobic.003G361100",
+    }
+    try:
+        _p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "gene_symbol_map.json")
+        if os.path.exists(_p):
+            with open(_p, "r", encoding="utf-8") as _f:
+                _d = json.load(_f)
+            _d.pop("_comment", None)
+            for _k, _v in _d.items():
+                if _k and _v:
+                    _m[_k] = _v  # JSON 覆盖硬编码（统一冲突 ID）
+            # 大小写归一：JSON 已收录的符号（小写相同）删掉硬编码残留，
+            # 避免 MA1(旧) 与 Ma1(新) 同时命中造成重复 ID。
+            _jlow = {str(k).lower() for k in _d}
+            for _k in list(_m.keys()):
+                _kl = str(_k).lower()
+                if _kl in _jlow and _k not in _d:
+                    del _m[_k]
+    except Exception:
+        pass
+    return _m
+
+
+SYMBOL_MAP = _load_symbol_map()
+
 
 # ──────────────────────────────────────────────────────────────────
 # 内部工具
@@ -40,26 +87,8 @@ def _extract_gene_ids(query: str) -> List[str]:
     for pat in patterns:
         ids.extend(re.findall(pat, query))
 
-    # 常用基因名 → Sobic ID 映射
-    _NAME_MAP = {
-        "AT1":   "Sobic.001G341700", "SbAT1": "Sobic.001G341700",
-        "SH1":   "Sobic.001G152901",
-        "AltSB": "Sobic.003G403000",
-        "ARG1":  "Sobic.007G085350",
-        "DW3":   "Sobic.007G163800", "SbDW3": "Sobic.007G163800",
-        "DW1":   "Sobic.009G229800", "SbDW1": "Sobic.009G229800",
-        "DW2":   "Sobic.006G067700", "SbDW2": "Sobic.006G067700",
-        "MA1":   "Sobic.006G057600", "SbMA1": "Sobic.006G057600",
-        "MA2":   "Sobic.006G095600",
-        "MA3":   "Sobic.010G230100",
-        "TB1":   "Sobic.001G121200", "SbTB1": "Sobic.001G121200",
-        "BY1":   "Sobic.002G379600",
-        "GC1":   "Sobic.010G022600",
-        "Y1":    "Sobic.006G030400",
-        "Tan1":  "Sobic.004G280200",
-        "B1":    "Sobic.004G071000",
-        "RCN1":  "Sobic.003G361100",
-    }
+    # 常用基因名 → Sobic ID 映射（zh-v3: 合并 gene_symbol_map.json，JSON 优先）
+    _NAME_MAP = SYMBOL_MAP
     for name, sobic_id in _NAME_MAP.items():
         if re.search(r'(?<![a-zA-Z0-9])' + re.escape(name) + r'(?![a-zA-Z0-9])',
                      query, re.IGNORECASE):
@@ -285,6 +314,26 @@ def format_for_prompt(ann: Dict, max_terms: int = 5) -> str:
     return '\n'.join(lines)
 
 
+def _is_generic_list_query(user_query: str) -> bool:
+    """泛列举类问题（问题本身不含具体基因名，如'驯化基因有哪些'）。"""
+    _marks = ["哪些", "有哪些", "有哪", "基因有", "调控基因", "控制基因", "相关基因",
+              "参与", "list", "gene list", "genes", "count", "多少", "gene(s)"]
+    _q = (user_query or "").lower()
+    return any(m in _q for m in _marks)
+
+
+def _format_symbol_ref_block() -> str:
+    """输出 已知符号→Sobic ID 参考对照块（仅作 ID 映射，非证据来源）。"""
+    if not SYMBOL_MAP:
+        return ""
+    lines = ["【已知基因符号 → Sobic ID 参考对照（BTx623 T2T）】"]
+    lines.append("以下符号→ID 对照仅用于把来源片段中出现的符号映射为基因座 ID，不是证据来源；")
+    lines.append("只有来源片段实际提到该符号时才可使用对应 ID，来源未提及的基因禁止引入。")
+    for _name, _id in sorted(SYMBOL_MAP.items()):
+        lines.append("- %s = %s" % (_name, _id))
+    return "\n".join(lines)
+
+
 def query_and_format(user_query: str, max_genes: int = 2) -> str:
     """
     主入口：从用户问题中提取基因ID / Pfam / IPR / GO 编号，
@@ -299,6 +348,14 @@ def query_and_format(user_query: str, max_genes: int = 2) -> str:
         ann = query_gene_annotation(gid)
         if ann:
             blocks.append(format_for_prompt(ann))
+
+    # ── 1.5 泛列举兜底（zh-v3）：中文问题无具体基因名时注入符号映射参考 ──
+    # 仅中文问题注入（英文路径文献片段已自带 ID，避免额外上下文影响英文质量）
+    _cn = sum(1 for c in user_query if "一" <= c <= "鿿") / max(len(user_query), 1) > 0.15
+    if _cn and not gene_ids and _is_generic_list_query(user_query):
+        _ref = _format_symbol_ref_block()
+        if _ref:
+            blocks.append(_ref)
 
     # ── 2. Pfam ID 自动检测 ──────────────────────────────────
     for m in _re.finditer(r'(?<![a-zA-Z0-9])PF(\d{5})(?![a-zA-Z0-9])', user_query, _re.IGNORECASE):
