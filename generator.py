@@ -33,11 +33,10 @@ class AnswerGenerator:
                 ],
                 temperature=0.0,
                 stream=True,
-                extra_body={
-                    "chat_template_kwargs": {
-                        "enable_thinking": enable_thinking
-                    }
-                } if enable_thinking else {},
+                # zh-v3(speed): chat_template_kwargs 是 vLLM 参数，DeepSeek 云 API 忽略，
+                # v4-pro 默认必思考 → 思考阶段耗时长。改用 thinking.type=disabled 真正关闭
+                # （已实测 reasoning=False 生效），False 时秒出答案；True 时保持默认思考。
+                extra_body={"thinking": {"type": "disabled"}} if not enable_thinking else {},
             )
             is_thinking = True
             print("\n" + "=" * 20 + " Reasoning Process " + "=" * 20)
@@ -76,11 +75,10 @@ class AnswerGenerator:
                 ],
                 temperature=0.0,
                 stream=True,
-                extra_body={
-                    "chat_template_kwargs": {
-                        "enable_thinking": enable_thinking
-                    }
-                } if enable_thinking else {},
+                # zh-v3(speed): chat_template_kwargs 是 vLLM 参数，DeepSeek 云 API 忽略，
+                # v4-pro 默认必思考 → 思考阶段耗时长。改用 thinking.type=disabled 真正关闭
+                # （已实测 reasoning=False 生效），False 时秒出答案；True 时保持默认思考。
+                extra_body={"thinking": {"type": "disabled"}} if not enable_thinking else {},
             )
             full_content = ""
             reasoning_content = ""
