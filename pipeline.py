@@ -22,7 +22,7 @@ pipeline.py
 import re
 import json
 import os
-from typing import Dict, Any, List, Iterator, Tuple
+from typing import Dict, Any, List, Iterator, Tuple, Optional, Set
 from config import CSV_PATHS, REFERENCE_LIMITS, COUNT_QUERY_MAX_SHOW
 from embeddings import BgeEmbeddingsWrapper
 from metadata_loader import load_citation_map, safe_get_ref_info
@@ -267,23 +267,46 @@ class SorghumRAGPipeline:
                 "or medical efficacy cannot be reliably answered with the available evidence."
             )
 
+    def _extract_cited_indices(self, answer: str) -> Optional[Set[int]]:
+        """解析正文中的 [n] / [n, m] 引用编号；无引用返回 None（走全量兜底）。"""
+        if not answer:
+            return None
+        found = set()
+        for _m in re.finditer(r"\[(\d[\d,\s]*)\]", answer):
+            for _part in _m.group(1).split(","):
+                _part = _part.strip()
+                if _part.isdigit():
+                    found.add(int(_part))
+        return found or None
+
     def _build_reference_list(
         self,
         source_index: Dict[str, Dict[str, str]],
         selected_hits: List[ChunkHit],
         query_type: str,
+        cited_indices: Optional[Set[int]] = None,
     ) -> List[str]:
         """
-        构建参考文献列表。
-        修改：只输出参考文献，不包含证据片段。
+        构建参考文献列表。只输出参考文献，不包含证据片段。
+        若给定 cited_indices（正文实际 [n] 引用的编号），只保留被引用的文献；
+        未给定时保留全部池子文献（兼容旧行为）。
         """
         # ref_limit removed to avoid ghost citations
         sorted_items = sorted(source_index.items(), key=lambda x: x[1]["idx"])
+
+        # 只保留与池子真实编号相交的被引编号；交集为空（编号越界/解析异常）→ 回退全量
+        idx_set = None
+        if cited_indices:
+            idx_set = {info["idx"] for info in source_index.values()} & cited_indices
+            if not idx_set:
+                idx_set = None
 
         ref_lines = []
         for _, info in sorted_items:
             fname = info["fname"]
             idx   = info["idx"]
+            if idx_set is not None and idx not in idx_set:
+                continue
             ref  = safe_get_ref_info(fname, self.citation_map)
             line = build_citation_string(ref, idx, fname)
             if line.strip():
@@ -449,8 +472,9 @@ class SorghumRAGPipeline:
         if query_type == "sequence":
             if seq_block:
                 answer = answer + seq_block
-        # 14. 参考文献（每条文献后紧跟对应证据片段）
-        references = self._build_reference_list(source_index, selected_hits, query_type)
+        # 14. 参考文献（只保留正文实际 [n] 引用的文献）
+        cited = self._extract_cited_indices(answer)
+        references = self._build_reference_list(source_index, selected_hits, query_type, cited)
         return {
             "query": user_query,
             "query_type": query_type,
@@ -536,19 +560,23 @@ class SorghumRAGPipeline:
             user_query, query_type, selected_hits, extra_types=extra_types, seq_context=seq_ctx
         )
 
-        # 13. 流式生成答案
+        # 13. 流式生成答案（同时累计正文，用于过滤参考文献）
+        answer_parts = []
         for chunk in self.generator.generate_stream(
             user_query, system_prompt, protected_map, enable_thinking=False
         ):
+            answer_parts.append(chunk)
             yield chunk
 
         # 13b. 序列注入（sequence 类型）
         if query_type == "sequence":
             if seq_block:
+                answer_parts.append(seq_block)
                 yield seq_block
 
-        # 14. 流结束后返回元数据（包含参考文献等）
-        references = self._build_reference_list(source_index, selected_hits, query_type)
+        # 14. 流结束后返回元数据（参考文献只保留正文实际 [n] 引用的）
+        cited = self._extract_cited_indices("".join(answer_parts))
+        references = self._build_reference_list(source_index, selected_hits, query_type, cited)
         import json
         meta = json.dumps({
             "query_type": query_type,
