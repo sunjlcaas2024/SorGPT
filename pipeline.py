@@ -279,6 +279,50 @@ class SorghumRAGPipeline:
                     found.add(int(_part))
         return found or None
 
+    @staticmethod
+    def _reorder_refs_by_appearance(answer: str, references: List[str]) -> Tuple[str, List[str], Dict[str, str]]:
+        """按文中首次出现顺序重排并重编号参考文献。
+        返回 (新answer, 新references, citation_map{旧号:新号})；无引用时原样返回 (answer, references, {})。"""
+        if not answer or not references:
+            return answer, references, {}
+        cite_pattern = re.findall(r"\[([\d,\s]+)\]", answer)
+        if not cite_pattern:
+            return answer, references, {}
+        seen = set()
+        ordered_old_ids = []
+        for group in cite_pattern:
+            for num in group.split(","):
+                num = num.strip()
+                if num.isdigit() and num not in seen:
+                    seen.add(num)
+                    ordered_old_ids.append(num)
+        if not ordered_old_ids:
+            return answer, references, {}
+        mapping = {old: str(new_idx) for new_idx, old in enumerate(ordered_old_ids, 1)}
+
+        # 重写正文引用编号
+        def _replace_cite(match):
+            nums = match.group(1)
+            new_nums = [mapping.get(n.strip(), n.strip()) for n in nums.split(",")]
+            return "[" + ", ".join(new_nums) + "]"
+
+        new_answer = re.sub(r"\[([\d,\s]+)\]", _replace_cite, answer)
+
+        # 重排参考文献（保留原编号前缀，改为新编号）
+        old_ref_map = {}
+        for ref in references:
+            m = re.match(r"\[(\d+)\]", ref)
+            if m:
+                old_ref_map[m.group(1)] = ref
+        new_references = []
+        for i, old_id in enumerate(ordered_old_ids, 1):
+            if old_id in old_ref_map:
+                old_ref = old_ref_map[old_id]
+                new_ref = re.sub(r"^\[\d+\]", "[%d]" % i, old_ref)
+                new_references.append(new_ref)
+        return new_answer, new_references, mapping
+
+
     def _build_reference_list(
         self,
         source_index: Dict[str, Dict[str, str]],
@@ -472,9 +516,10 @@ class SorghumRAGPipeline:
         if query_type == "sequence":
             if seq_block:
                 answer = answer + seq_block
-        # 14. 参考文献（只保留正文实际 [n] 引用的文献）
+        # 14. 参考文献（只保留正文实际 [n] 引用的文献）+ 按出现顺序重排重编号
         cited = self._extract_cited_indices(answer)
         references = self._build_reference_list(source_index, selected_hits, query_type, cited)
+        answer, references, cmap = self._reorder_refs_by_appearance(answer, references)
         return {
             "query": user_query,
             "query_type": query_type,
@@ -482,6 +527,7 @@ class SorghumRAGPipeline:
             "meta_hits": meta_hits,
             "chunk_hits": selected_hits,
             "references": references,
+            "citation_map": cmap,
             "evidence_text": "",
         }
 
@@ -574,12 +620,16 @@ class SorghumRAGPipeline:
                 answer_parts.append(seq_block)
                 yield seq_block
 
-        # 14. 流结束后返回元数据（参考文献只保留正文实际 [n] 引用的）
-        cited = self._extract_cited_indices("".join(answer_parts))
+        # 14. 流结束后返回元数据（参考文献只保留正文实际 [n] 引用的 + 按出现顺序重排重编号）
+        _full_answer = "".join(answer_parts)
+        cited = self._extract_cited_indices(_full_answer)
         references = self._build_reference_list(source_index, selected_hits, query_type, cited)
+        _, new_references, cmap = self._reorder_refs_by_appearance(_full_answer, references)
         import json
-        meta = json.dumps({
+        meta = {
             "query_type": query_type,
-            "references": references
-        }, ensure_ascii=False)
-        yield "\n\n---METADATA---\n" + meta + "\n"
+            "references": new_references if new_references else references,
+        }
+        if cmap:
+            meta["citation_map"] = cmap
+        yield "\n\n---METADATA---\n" + json.dumps(meta, ensure_ascii=False) + "\n"
