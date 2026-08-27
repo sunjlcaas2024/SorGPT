@@ -213,7 +213,7 @@ class SorghumRAGPipeline:
 
     def _ask_with_cloned_genes(self, uq, ct):
         s = self._build_cloned_gene_prompt(uq, ct)
-        a = self.generator.generate(uq, s, {}, enable_thinking=False)
+        a = self.generator.generate(uq, s, {}, enable_thinking=True)
         return {"query": uq, "query_type": "gene_list", "answer": a, "references": []}
 
     def _format_locate_answer(self, meta_hits: List[MetaPaper]) -> str:
@@ -510,7 +510,7 @@ class SorghumRAGPipeline:
         print("=" * 60)
         # 13. 生成答案（大模型只调用这一次，流式打印在 generator 内完成）
         answer = self.generator.generate(
-            user_query, system_prompt, protected_map, enable_thinking=False
+            user_query, system_prompt, protected_map, enable_thinking=True
         )
         # 13b. 序列注入（sequence 类型）
         if query_type == "sequence":
@@ -558,7 +558,7 @@ class SorghumRAGPipeline:
         if is_cloned and query_type in ("count", "gene_list", "mechanism", "factoid", "review", "gene_function"):
             cloned_genes_text = self._get_cloned_genes_for_prompt()
             system = self._build_cloned_gene_prompt(user_query, cloned_genes_text)
-            for chunk in self.generator.generate_stream(user_query, system, {}, enable_thinking=False):
+            for chunk in self.generator.generate_stream(user_query, system, {}, enable_thinking=True):
                 yield chunk
             # Send empty references for cloned gene answers
             import json as _json
@@ -609,7 +609,7 @@ class SorghumRAGPipeline:
         # 13. 流式生成答案（同时累计正文，用于过滤参考文献）
         answer_parts = []
         for chunk in self.generator.generate_stream(
-            user_query, system_prompt, protected_map, enable_thinking=False
+            user_query, system_prompt, protected_map, enable_thinking=True
         ):
             answer_parts.append(chunk)
             yield chunk

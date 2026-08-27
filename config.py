@@ -32,7 +32,7 @@ SMALL_MODEL_PATH = "/vol/sunjilin/website/data/agent/models/Qwen/Qwen2.5-7B-Inst
 # -----------------------------
 BASE_URL        = "https://api.deepseek.com/v1"
 API_KEY         = "sk-8571d510f5fb43219eecf86a85d8def6"
-LOCAL_MODEL_NAME = "deepseek-v4-pro"
+LOCAL_MODEL_NAME = "deepseek-v4-flash"
 
 # -----------------------------
 # 元数据索引路径
