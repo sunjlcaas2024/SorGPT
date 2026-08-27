@@ -622,6 +622,10 @@ class SorghumRAGPipeline:
 
         # 14. 流结束后返回元数据（参考文献只保留正文实际 [n] 引用的 + 按出现顺序重排重编号）
         _full_answer = "".join(answer_parts)
+        # zh-v4(refs): 思考开启时 answer_parts 含 reasoning 内容，其中大量 [数字]
+        # 会污染被引编号提取 → 只取 "End of reasoning" 之后的正文部分提取引用并重排。
+        if "End of reasoning" in _full_answer:
+            _full_answer = _full_answer.split("End of reasoning", 1)[-1]
         cited = self._extract_cited_indices(_full_answer)
         references = self._build_reference_list(source_index, selected_hits, query_type, cited)
         _, new_references, cmap = self._reorder_refs_by_appearance(_full_answer, references)
