@@ -52,6 +52,47 @@ def _get_bm25() -> Optional["BM25Scorer"]:
     return _bm25_scorer
 
 
+# ============ zh-v5: 中文检索查询重写 ============
+# 问题: "介绍红缨子" 这类带泛化动词的中文查询，BGE-M3 查询嵌入被"介绍"带偏，
+#       zh 索引检索不到红缨子论文；且 2-3 字品种名("红缨子")单独嵌入也不可靠。
+# 做法: 剥离句首泛化框架词；若核心不足 4 汉字且无高粱语境词，补"高粱"锚点。
+#       仅用于 zh 索引的检索 query，不改变传给 LLM 的原始问题；en 检索 query 不变。
+_ZH_FRAMING = [
+    "介绍一下", "请介绍", "介绍下", "说一下", "聊一聊", "我想了解", "我想知道",
+    "说说", "讲讲", "谈谈", "简述", "概述", "描述", "讲解",
+    "什么是", "是什么", "怎么样", "怎么", "怎样", "如何",
+    "请问", "麻烦", "帮我", "关于", "介绍",
+]
+
+def _strip_zh_framing(s: str) -> str:
+    """最长优先剥离句首泛化框架词。"""
+    words = sorted(_ZH_FRAMING, key=len, reverse=True)
+    changed = True
+    while changed and s:
+        changed = False
+        for w in words:
+            if s.startswith(w):
+                s = s[len(w):].lstrip(" ，,、")
+                changed = True
+                break
+    return s.strip(" ，,、")
+
+_SG_CONTEXT = ("高粱", "高梁", "sorghum", "Sorghum")
+
+def _build_zh_retrieval_query(user_query: str) -> str:
+    """生成中文索引专用检索 query（英文查询原样返回）。"""
+    cn = sum(1 for c in user_query if "一" <= c <= "鿿")
+    if cn / max(len(user_query), 1) <= 0.15:
+        return user_query
+    core = _strip_zh_framing(user_query)
+    if not core:
+        return user_query
+    core_cn = sum(1 for c in core if "一" <= c <= "鿿")
+    if core_cn and core_cn <= 3 and not any(k in core for k in _SG_CONTEXT):
+        return core + "高粱"
+    return core
+
+
 @dataclass
 class MetaPaper:
     filename: str = ""
@@ -168,6 +209,8 @@ class Retriever:
         """
         hybrid_query = (f"{user_query}\nEnglish keywords: {en_keywords}"
                         if en_keywords else user_query)
+        # zh-v5: 中文索引用重写后的检索 query（剥离泛化动词+短实体补高粱锚点）
+        zh_query = _build_zh_retrieval_query(user_query)
         k = COUNT_QUERY_FETCH_K if query_type in ("count", "review", "gene_list") else TOP_META_K
 
         papers: List[MetaPaper] = []
@@ -182,7 +225,8 @@ class Retriever:
             _k = k
             if _is_cn and lang == "english":
                 _k = max(k, k * 2)  # 英文 meta 多取，扩大英文候选
-            results = db.similarity_search_with_score(hybrid_query, k=_k)
+            _q = zh_query if (lang == "chinese" and zh_query != user_query) else hybrid_query
+            results = db.similarity_search_with_score(_q, k=_k)
             for doc, score in results:
                 md = doc.metadata or {}
                 # 无关中文期刊（电影/生活/农业推广类）不入检索池
@@ -304,6 +348,11 @@ class Retriever:
         hybrid_query = (f"{user_query}\nEnglish keywords: {en_keywords}"
                         if en_keywords else user_query)
 
+        # zh-v5: 中文全文索引用重写后的 query_vec，en 索引保持原 query_vec
+        zh_query = _build_zh_retrieval_query(user_query)
+        zh_query_vec = (self.embed_model.embed_query_np(zh_query)
+                        if zh_query != user_query else None)
+
         merged_hits: List[ChunkHit] = []
         seen = set()
 
@@ -340,7 +389,8 @@ class Retriever:
             _search_k = TOP_CHUNK_K * _dynamic_mult
             if is_cn and index_name.startswith("en_"):
                 _search_k = TOP_CHUNK_K
-            scores, ids = index.search(query_vec, _search_k)
+            _qvec = zh_query_vec if (zh_query_vec is not None and index_name.startswith("zh_")) else query_vec
+            scores, ids = index.search(_qvec, _search_k)
 
             granularity = index_name.split("_")[-1]   # fine / std / large / para
             lang = index_name.split("_")[0]           # en
