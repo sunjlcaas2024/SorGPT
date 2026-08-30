@@ -10,7 +10,7 @@ SSH 方式:   ssh -J cluster server
 Conda 环境: sorghum_rag (miniforge3)
 服务启动:   cd /vol/sunjilin/website/data/agent/sorghum_rag && conda activate sorghum_rag && python api_server.py
 服务端口:   8000
-API Key:    请求头 X-API-Key: sk-6a687dfd1e7d4cd09ebe9afc612965a5
+API Key:    请求头 X-API-Key: "$SORGPT_ADMIN_KEY"
 健康检查:   ssh -J cluster server "curl -s http://localhost:8000/"
 ```
 
@@ -136,7 +136,7 @@ rm -rf __pycache__/pipeline*.pyc && 重启
 # 测试 API
 curl -X POST http://localhost:8000/ask \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: sk-6a687dfd1e7d4cd09ebe9afc612965a5" \
+  -H "X-API-Key: "$SORGPT_ADMIN_KEY"" \
   -d '{"question":"What genes control plant height in sorghum?"}'
 
 # Git

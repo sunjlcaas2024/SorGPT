@@ -31,7 +31,11 @@ SMALL_MODEL_PATH = "/vol/sunjilin/website/data/agent/models/Qwen/Qwen2.5-7B-Inst
 # Dashscope Qwen API (local cost-saving)
 # -----------------------------
 BASE_URL        = "https://api.deepseek.com/v1"
-API_KEY         = "sk-8571d510f5fb43219eecf86a85d8def6"
+# 密钥加固(2026-08-30): DeepSeek key 仅从环境变量 DEEPSEEK_API_KEY 注入(start.sh source .env)，
+# 源码不保留任何 key 字面量。未设置时启动即报错，防止静默使用过期 key。
+API_KEY         = os.environ.get("DEEPSEEK_API_KEY") or ""
+if not API_KEY:
+    raise RuntimeError("缺少环境变量 DEEPSEEK_API_KEY，请在 .env 配置后通过 start.sh 启动")
 LOCAL_MODEL_NAME = "deepseek-v4-flash"
 
 # -----------------------------

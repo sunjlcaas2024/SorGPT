@@ -265,11 +265,12 @@ if __name__ == "__main__":
     pipeline = get_global_pipeline()
     print("RAG 管道加载完成，启动 API 服务器")
 
-    # 使用固定的admin API key，避免重启后变化
-    FIXED_ADMIN_KEY = "sk-6a687dfd1e7d4cd09ebe9afc612965a5"
+    # 密钥加固(2026-08-30): 管理员 key 从环境变量 SORGPT_ADMIN_KEY 注入，
+    # 不再硬编码进源码(旧 key 已泄露轮换)。未设置时随机生成并在日志打印一次。
+    ADMIN_KEY = os.environ.get("SORGPT_ADMIN_KEY", "").strip()
     if not api_keys:
         admin_id = str(uuid.uuid4())
-        api_key = FIXED_ADMIN_KEY
+        api_key = ADMIN_KEY if ADMIN_KEY else ("sk-" + uuid.uuid4().hex)
         session = UserSession(admin_id, api_key)
         users_db[admin_id] = session
         api_keys[api_key] = admin_id
