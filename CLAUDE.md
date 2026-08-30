@@ -74,6 +74,10 @@ FastAPI → query_classifier (9类型路由) → metadata FAISS → fulltext FAI
 - std/large 去重: >70% 重叠→保留最佳粒度
 - BM25 Density Gate: gene_list需≥0.5或≥3chunk, gene_function≥0.3
 - 双语检索: EN+ZH平行，英语跳过中文索引
+- **zh-v5 (2026-08-30)**: 中文检索查询重写 `_build_zh_retrieval_query()` — 剥离句首泛化动词(介绍/简述/什么是等),核心≤3汉字无高粱语境词时补"高粱"锚点;仅用于 zh 索引检索,en 索引与传给 LLM 的问题不变。修复"介绍红缨子"检索不到红缨子论文(BGE-M3 嵌入被泛化动词带偏)
+
+### 重排 (reranker.py)
+- **zh-v6 (2026-08-30)**: `diversify_and_trim` 新增中文保底 `ZH_MIN=max(limit//3,3)`(镜像 EN_MIN)— 命中中文 chunk 时确保最终池至少保留 ZH_MIN 条中文,防止高分英文综述(para交叉加成+引用加成)把中文全部挤出。修复"高粱的营养价值"0中文引用
 
 ### 配置 (config.py)
 - TOP_META_K: 300→120
