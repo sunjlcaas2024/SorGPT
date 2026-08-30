@@ -11,6 +11,7 @@ Conda 环境: sorghum_rag (miniforge3)
 服务启动:   cd /vol/sunjilin/website/data/agent/sorghum_rag && conda activate sorghum_rag && python api_server.py
 服务端口:   8000
 API Key:    请求头 X-API-Key: "$SORGPT_ADMIN_KEY"
+前端:       零 key — bundle 不携带任何 key，无/无效 X-API-Key 自动落 web 兖底会话(SORGPT_WEB_KEY, 每日 200 次)；CORS 白名单 SORGPT_CORS_ORIGINS
 健康检查:   ssh -J cluster server "curl -s http://localhost:8000/"
 ```
 
