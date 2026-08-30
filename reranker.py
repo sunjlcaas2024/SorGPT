@@ -299,4 +299,19 @@ class Reranker:
                         if sum(1 for x in selected if x.lang == "en") >= EN_MIN:
                             break
 
+        # zh-v6: 中文问题保底中文文献 —— 高分英文综述(para交叉加成+引用加成)会把
+        # 中文 chunk 全部挤出(如"高粱的营养价值"86条中文被全裁), 确保最终池
+        # 至少保留 ZH_MIN 条中文证据, 供模型回答中文文献。
+        if any(h.lang == "zh" for h in hits) and query_type in ("review", "gene_list", "count", "mechanism"):
+            ZH_MIN = max(limit // 3, 3)
+            if sum(1 for h in selected if h.lang == "zh") < ZH_MIN:
+                _chosen = {basename_lower(h.source) for h in selected}
+                for h in hits:  # hits 已按 final_score 排序
+                    if h.lang != "zh" or basename_lower(h.source) in _chosen:
+                        continue
+                    selected.append(h)
+                    _chosen.add(basename_lower(h.source))
+                    if sum(1 for x in selected if x.lang == "zh") >= ZH_MIN:
+                        break
+
         return selected
