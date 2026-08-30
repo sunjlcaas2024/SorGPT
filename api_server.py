@@ -36,10 +36,13 @@ def get_global_pipeline() -> SorghumRAGPipeline:
 # ============== 用户认证系统 ==============
 class UserSession:
     """用户会话管理"""
-    def __init__(self, user_id: str, api_key: str):
+    def __init__(self, user_id: str, api_key: str, daily_limit=None):
         self.user_id = user_id
         self.api_key = api_key
         self.query_count = 0
+        self.daily_limit = daily_limit if daily_limit else MAX_QUERY_PER_DAY
+        self.daily_count = 0
+        self.daily_date = time.strftime("%Y-%m-%d")
         self.last_query_time = 0
         self.created_at = time.time()
 
@@ -130,16 +133,25 @@ def _normalize_citations(answer: str, references: list):
 
 app = FastAPI(title="SorGPT API", description="高粱科研问答 RAG 系统 API", version="1.0.1")
 
+# CORS 白名单(2026-08-30): 从 SORGPT_CORS_ORIGINS 环境变量读取(逗号分隔)，不再全开 *。
+_DEFAULT_CORS = ["http://www.sorghumdb.com", "http://localhost:8080", "http://localhost:8000"]
+CORS_ORIGINS = [o.strip() for o in os.environ.get("SORGPT_CORS_ORIGINS", "").split(",") if o.strip()] or _DEFAULT_CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=CORS_ORIGINS,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 # ============== 依赖注入 ==============
-async def get_current_user(x_api_key: str = Header(..., alias="X-API-Key")) -> UserSession:
-    session = verify_api_key(x_api_key)
+# web 兜底会话(2026-08-30): 前端 bundle 零 key，无/无效 X-API-Key 的请求自动落到该会话，
+# 受 10s 间隔 + 每日配额约束。由 __main__ 启动时从 SORGPT_WEB_KEY 注册。
+_web_session: Optional[UserSession] = None
+
+async def get_current_user(x_api_key: str = Header(default=None)) -> UserSession:
+    session = verify_api_key(x_api_key) if x_api_key else None
+    if not session:
+        session = _web_session
     if not session:
         raise HTTPException(status_code=401, detail="无效的 API Key")
 
@@ -147,8 +159,17 @@ async def get_current_user(x_api_key: str = Header(..., alias="X-API-Key")) -> U
     if current_time - session.last_query_time < RATE_LIMIT_SECONDS:
         raise HTTPException(status_code=429, detail=f"请求过于频繁，请等待 {RATE_LIMIT_SECONDS} 秒")
 
+    # 每日配额强制(2026-08-30): 修复 MAX_QUERY_PER_DAY 定义了未强制的问题(P0-3)
+    today = time.strftime("%Y-%m-%d")
+    if session.daily_date != today:
+        session.daily_date = today
+        session.daily_count = 0
+    if session.daily_count >= session.daily_limit:
+        raise HTTPException(status_code=429, detail=f"今日查询额度已用完（每日 {session.daily_limit} 次）")
+
     session.last_query_time = current_time
     session.query_count += 1
+    session.daily_count += 1
     return session
 
 # ============== API 路由 ==============
@@ -157,7 +178,8 @@ async def health_check():
     return HealthResponse(status="ok", users_online=len(users_db), version="1.0.1")
 
 @app.post("/register")
-async def register_user(username: str = "anonymous"):
+async def register_user(username: str = "anonymous", session: UserSession = Depends(get_current_user)):
+    # 2026-08-30: 加认证依赖，无 key 调用落 web 兜底会话限流，防批量刷 key
     user_id, api_key = create_user(username)
     return {"user_id": user_id, "api_key": api_key, "message": "请妥善保存 API Key"}
 
@@ -279,5 +301,18 @@ if __name__ == "__main__":
         print(f"  User ID: {admin_id}")
         print(f"  API Key: {api_key}")
         print("="*60 + "\n")
+
+    # web 兜底会话(2026-08-30): 从 SORGPT_WEB_KEY 注册专用用户，前端零 key 请求自动落到此会话。
+
+    WEB_KEY = os.environ.get("SORGPT_WEB_KEY", "").strip()
+    WEB_LIMIT = int(os.environ.get("SORGPT_WEB_DAILY_LIMIT", "200") or 200)
+    if WEB_KEY and WEB_KEY not in api_keys:
+        web_id = str(uuid.uuid4())
+        _web_session = UserSession(web_id, WEB_KEY, daily_limit=WEB_LIMIT)
+        users_db[web_id] = _web_session
+        api_keys[WEB_KEY] = web_id
+        print(f"[web] 前端兜底会话已创建: {web_id} (daily_limit={WEB_LIMIT})")
+    else:
+        print("[web] 未配置 SORGPT_WEB_KEY，无兜底会话(无 key 请求将被拒绝)")
 
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)
