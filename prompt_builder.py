@@ -202,6 +202,7 @@ If the question asks which papers/studies report, describe, or investigate X:
 For general review questions: synthesize thematically across sources (not paper-by-paper);
 identify dominant gene families, key open questions, and comparison with other cereals.
 Cite every factual claim.
+Answer concisely in under 800 words (prioritize the most important points; do not pad).
 """,
 
 "gene_list": """\
@@ -212,6 +213,9 @@ TASK: Compile a gene list related to the requested trait or process.
   (dominant families, chromosomal enrichment, confidence levels).
 • Use (GeneDB) data to verify IDs and supplement descriptions.
 • Label confidence: well-characterized / predicted / inferred by homology.
+• Keep the answer concise (under 700 words): use a compact table and
+  prioritize well-characterized genes; if the list is long, state the total
+  count instead of exhaustively padding each entry.
 """,
 
 "locate": """\
@@ -301,6 +305,7 @@ _TASK_ZH = {
 对于一般综述问题：按主题而非逐篇综合来源；
 识别主导基因家族、关键开放问题，并与其他禾本科作物比较。
 每个论断需引用来源。
+总篇幅控制在 800 字以内（优先讲重点，不要凑字数）。
 """,
 
 "gene_list": """\
@@ -310,6 +315,8 @@ _TASK_ZH = {
 • 列表后写一段总结，分析规律（主导家族、染色体富集、可信度）。
 • 使用 (GeneDB) 注释核实ID并补充描述。
 • 标注可信度：功能明确 / 预测 / 同源推断。
+• 总篇幅控制在 700 字以内：用紧凑表格优先列出功能明确的基因；
+  若基因很多，注明总数，不要逐个灌水。
 """,
 
 "locate": """\

@@ -22,10 +22,10 @@ class AnswerGenerator:
     def __init__(self):
         self.client = OpenAI(api_key=API_KEY, base_url=BASE_URL)
 
-    def generate(self, user_query: str, system_prompt: str, protected_map: dict, enable_thinking: bool = True) -> str:
+    def generate(self, user_query: str, system_prompt: str, protected_map: dict, enable_thinking: bool = True, max_tokens: int | None = None) -> str:
         full_content = ""
         try:
-            stream = self.client.chat.completions.create(
+            kwargs = dict(
                 model=LOCAL_MODEL_NAME,
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -38,6 +38,11 @@ class AnswerGenerator:
                 # （已实测 reasoning=False 生效），False 时秒出答案；True 时保持默认思考。
                 extra_body={"thinking": {"type": "disabled"}} if not enable_thinking else {},
             )
+            # zh-v11(speed): 硬上限。软性字数指令模型常无视（实测 gene_list/review 生成长文），
+            # max_tokens 兜底截断，保证延迟有界。None 表示不限制。
+            if max_tokens:
+                kwargs["max_tokens"] = max_tokens
+            stream = self.client.chat.completions.create(**kwargs)
             is_thinking = True
             print("\n" + "=" * 20 + " Reasoning Process " + "=" * 20)
             for chunk in stream:
@@ -58,7 +63,7 @@ class AnswerGenerator:
         except Exception as e:
             return f"[ERROR] generation failed: {e}"
 
-    def generate_stream(self, user_query: str, system_prompt: str, protected_map: dict, enable_thinking: bool = True):
+    def generate_stream(self, user_query: str, system_prompt: str, protected_map: dict, enable_thinking: bool = True, max_tokens: int | None = None):
         """流式生成，yield每个token块供API使用
 
         输出格式:
@@ -67,7 +72,7 @@ class AnswerGenerator:
         - 最终内容: 直接yield，无前缀
         """
         try:
-            stream = self.client.chat.completions.create(
+            kwargs = dict(
                 model=LOCAL_MODEL_NAME,
                 messages=[
                     {"role": "system", "content": system_prompt},
@@ -80,6 +85,10 @@ class AnswerGenerator:
                 # （已实测 reasoning=False 生效），False 时秒出答案；True 时保持默认思考。
                 extra_body={"thinking": {"type": "disabled"}} if not enable_thinking else {},
             )
+            # zh-v11(speed): 硬上限，见 generate()。
+            if max_tokens:
+                kwargs["max_tokens"] = max_tokens
+            stream = self.client.chat.completions.create(**kwargs)
             full_content = ""
             reasoning_content = ""
             in_thinking = True

@@ -266,6 +266,10 @@ def _is_gene_list(q): return any(p in q for p in [
     "有哪些基因","哪些基因","关键基因","已知基因","鉴定到的基因","候选基因","相关基因","功能基因","调控基因","有哪些","相关的基因",
     "有哪些转录因子","what genes","which genes","genes involved in",
     "genes associated with","genes controlling","key genes for",
+    # zh-v11: "已克隆/已鉴定基因"类问题 → 基因清单（否则落 review 兜底生成长文，慢）
+    "已克隆基因","克隆的基因","已克隆的基因","已鉴定基因","鉴定出的基因","已鉴定的基因",
+    "cloned genes","genes have been cloned","identified genes","genes identified",
+    "genes have been identified","genes were identified",
 ])
 
 def _is_mechanism(q): return any(p in q for p in [

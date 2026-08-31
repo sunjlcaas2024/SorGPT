@@ -208,12 +208,13 @@ class SorghumRAGPipeline:
     def _build_cloned_gene_prompt(self, uq, ct):
         from prompt_builder import detect_language
         if detect_language(uq) == "chinese":
-            return f"你是SorGPT，高粱AI智能问答助手。请对以下已克隆/功能验证的高粱基因数据库进行深度分析。\n\n## 你的任务\n对每一个克隆基因进行详细介绍，而不是简单罗列。每个基因都要说明其分子功能、实验证据和原始文献。\n\n## 输出格式\n1. 总览：总结整体情况\n2. 分功能类别详细分析：按性状类别分组，每组包含生物学背景、表格(Gene Name | Gene ID | Molecular Function | Evidence | Reference)和研究进展小结\n3. 跨类别规律\n4. 研究前沿与展望\n5. 基因名和术语用英文，回答必须使用中文\n\n## 关键要求\n每个基因都要展现，参考文献必须展示，不要编造Confidence等级\n\n{ct}"
-        return f"You are SorGPT, a world-class expert in sorghum genomics. Perform a deep, comprehensive analysis of the following cloned/functionally validated sorghum gene database.\n\n## Your Task\nProvide a detailed introduction for each and every cloned gene.\n\n## Output Format\n1. Overview\n2. Detailed Category Analysis with tables (Gene Name | Gene ID | Molecular Function | Evidence | Reference)\n3. Cross-Category Patterns\n4. Frontiers & Outlook\n\n## Key Requirements\nCover every gene, show references, do not fabricate confidence levels\n\n{ct}"
+            return f"你是SorGPT，高粱AI智能问答助手。请对以下已克隆/功能验证的高粱基因数据库进行简洁分析。\n\n## 你的任务\n对每一个克隆基因用表格一行简洁说明，不要逐个长篇展开。\n\n## 输出格式\n1. 总览：总结整体情况\n2. 分功能类别分析：按性状类别分组，每组包含表格(Gene Name | Gene ID | Molecular Function | Evidence | Reference)和一句小结\n3. 跨类别规律\n4. 研究前沿与展望\n5. 基因名和术语用英文，回答必须使用中文\n\n## 关键要求\n整篇回答控制在 700 字以内，用紧凑表格逐基因列出，优先讲重点；参考文献必须展示，不要编造Confidence等级\n\n{ct}"
+        return f"You are SorGPT, a world-class expert in sorghum genomics. Analyze the following cloned/functionally validated sorghum gene database.\n\n## Your Task\nProvide a concise entry for each cloned gene: one compact table row (Gene Name | Gene ID | Molecular Function | Evidence | Reference).\n\n## Output Format\n1. Overview\n2. Category Analysis with compact tables\n3. Cross-Category Patterns\n4. Frontiers & Outlook\n\n## Key Requirements\nKeep the entire answer under 700 words; use compact tables and prioritize key genes, stating total counts; show references; do not fabricate confidence levels\n\n{ct}"
 
     def _ask_with_cloned_genes(self, uq, ct):
         s = self._build_cloned_gene_prompt(uq, ct)
-        a = self.generator.generate(uq, s, {}, enable_thinking=True)
+        # zh-v11(speed): enable_thinking=False 关思考静默期；max_tokens=1500 硬截断兜底
+        a = self.generator.generate(uq, s, {}, enable_thinking=False, max_tokens=1500)
         return {"query": uq, "query_type": "gene_list", "answer": a, "references": []}
 
     def _format_locate_answer(self, meta_hits: List[MetaPaper]) -> str:
@@ -429,7 +430,8 @@ class SorghumRAGPipeline:
                 "evidence_text": "",
             }
         # 3b. Cloned gene database lookup
-        cloned_gene_patterns = ["克隆基因", "cloned gene", "known gene", "已克隆基因"]
+        # zh-v11: 补充带"的"的写法（"已克隆的基因""克隆的基因"），中英一致进快速克隆路径
+        cloned_gene_patterns = ["克隆基因", "克隆的基因", "已克隆基因", "已克隆的基因", "cloned gene", "known gene"]
         is_cloned = any(p in user_query.lower() for p in cloned_gene_patterns)
         if is_cloned and query_type in ("count", "gene_list", "mechanism", "factoid", "review", "gene_function"):
             cloned_genes_text = self._get_cloned_genes_for_prompt()
@@ -509,6 +511,9 @@ class SorghumRAGPipeline:
         print(f"检索关键词: {en_keywords}")
         print("=" * 60)
         # 13. 生成答案（大模型只调用这一次，流式打印在 generator 内完成）
+        # zh-v11(speed): 此处 enable_thinking=True，思考 token 计入 max_tokens，
+        # 若设硬上限可能思考吃满预算→答案被截空。故主管线不设 max_tokens，
+        # 限长靠 prompt_builder 软性指令（review 800词 / gene_list 700字）约束。
         answer = self.generator.generate(
             user_query, system_prompt, protected_map, enable_thinking=True
         )
@@ -553,12 +558,14 @@ class SorghumRAGPipeline:
             return
 
         # 4b. 克隆基因数据库查询
-        cloned_gene_patterns = ["克隆基因", "cloned gene", "known gene", "已克隆基因"]
+        # zh-v11: 补充带"的"写法，与 ask() 一致
+        cloned_gene_patterns = ["克隆基因", "克隆的基因", "已克隆基因", "已克隆的基因", "cloned gene", "known gene"]
         is_cloned = any(p in user_query.lower() for p in cloned_gene_patterns)
         if is_cloned and query_type in ("count", "gene_list", "mechanism", "factoid", "review", "gene_function"):
             cloned_genes_text = self._get_cloned_genes_for_prompt()
             system = self._build_cloned_gene_prompt(user_query, cloned_genes_text)
-            for chunk in self.generator.generate_stream(user_query, system, {}, enable_thinking=True):
+            # zh-v11(speed): 与 ask() 一致，关思考 + max_tokens 硬截断
+            for chunk in self.generator.generate_stream(user_query, system, {}, enable_thinking=False, max_tokens=1500):
                 yield chunk
             # Send empty references for cloned gene answers
             import json as _json
@@ -607,6 +614,8 @@ class SorghumRAGPipeline:
         )
 
         # 13. 流式生成答案（同时累计正文，用于过滤参考文献）
+        # zh-v11(speed): 与 ask() 一致——enable_thinking=True 时不设 max_tokens，
+        # 防止思考吃满预算截空答案；限长靠 prompt_builder 软性指令。
         answer_parts = []
         for chunk in self.generator.generate_stream(
             user_query, system_prompt, protected_map, enable_thinking=True
