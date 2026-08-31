@@ -17,6 +17,7 @@ retriever.py
 """
 
 import os
+import re
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 from collections import defaultdict
@@ -27,7 +28,8 @@ from langchain_community.vectorstores import FAISS
 from config import (
     META_INDEX_PATHS, FULLTEXT_INDEX_PATHS, TOP_META_K, TOP_CHUNK_K,
     COUNT_QUERY_FETCH_K, QUERY_TYPE_TO_INDEXES,
-    DEFAULT_NPROBE, USE_FAISS_GPU, GPU_DEVICE, TRANSLATE_ZH_TO_EN
+    DEFAULT_NPROBE, USE_FAISS_GPU, GPU_DEVICE, TRANSLATE_ZH_TO_EN,
+    META_ENTITY_INJECT
 )
 import json
 from utils import basename_lower, norm_text
@@ -46,6 +48,10 @@ _ZH_BM25_IDF_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "zh
 _ZH_BM25_WEIGHT = 0.15  # λ_zh 保守起步，A/B 0.15/0.20/0.25
 _ZH_BM25_CAP = 30.0     # 中文 BM25 归一化上限（校准: 30 题中文 × 2000 采样 chunk，raw p95=24.1/p100=33.2）
 _ZH_BM25_TOP = 100      # 每 zh 索引最多算 BM25 的向量序前 N 个存活候选（jieba 延迟控制）
+
+# zh-v9: 实体 token 低频召回注入（修复 meta 池截断漏检）
+_META_INJECT_CAP = 50    # 单 token 命中篇数 ≤ 该值才算"低频特异实体"，注入其命中论文
+_META_INJECT_MAX = 300   # 单次查询最多注入的论文数（性能上限）
 
 def _get_bm25() -> Optional["BM25Scorer"]:
     """Lazy-load BM25 scorer with pre-computed IDF."""
@@ -335,7 +341,95 @@ class Retriever:
                     meta_text=f"Gene index match: {_gene_str}",
                     lang="en"))
 
-        return papers[:k]
+        papers = papers[:k]
+
+        # zh-v9: 实体 token 低频召回注入 —— 修复 meta 池截断漏检。
+        # 中文题英文 meta 池只保留 top-100，会漏掉"摘要/正文才提到查询实体"的论文
+        # （如 E048 T2T 组装的 Chen 2025 论文向量 rank155 被剔除，但全文检索本可命中）。
+        # 只在会用全文检索的问题类型注入（locate/count/boundary 直接返回，不改其答案）。
+        if META_ENTITY_INJECT and _is_cn and query_type not in ("locate", "count", "boundary"):
+            try:
+                _inject = self._meta_entity_inject(user_query, _en_query, papers)
+                if _inject:
+                    papers.extend(_inject)
+            except Exception as _e:
+                print(f"[WARN] meta_entity_inject 失败: {_e}", flush=True)
+
+        return papers
+
+    def _meta_doc_values(self, db) -> list:
+        """取 meta 库 docstore 的文档列表（InMemoryDocstore 直接取 _dict）。"""
+        ds = db.docstore
+        d = getattr(ds, "_dict", None)
+        if d is not None:
+            return [doc for doc in d.values() if doc is not None]
+        i2d = db.index_to_docstore_id
+        return [ds.search(i) for i in i2d.values() if i is not None]
+
+    def _meta_entity_inject(self, user_query: str, en_query: str,
+                            current_papers: List[MetaPaper]) -> List[MetaPaper]:
+        """zh-v9 实体 token 低频召回注入。
+
+        纯向量 meta 池 top-k 会漏掉"摘要/正文才提到查询实体"的论文（如 E048 只出现
+        在 Chen 2025 论文摘要，向量 rank 155 被 top-100 英文池剔除）。对查询中的候选
+        token（拉丁字母词 + CJK 2-6 字词组，取自 user_query 与英文译文）逐字扫 meta
+        文档：某 token 命中篇数 ≤ _META_INJECT_CAP（低频=特异实体）时，把命中论文
+        注入 allowed 池；命中篇数 > cap（高频通用词 genome/sorghum 等）跳过——
+        向量检索已覆盖，避免池膨胀。
+        """
+        tokens = set()
+        for t in re.findall(r"[A-Za-z][A-Za-z0-9]{2,}", user_query):
+            tokens.add(t.lower())
+        if en_query:
+            # 只取译文部分，不取追加的 en_keywords 后缀（"genome, gene, sorghum, T2T..."
+            # 等通用词会让 token 过注，稀释 allowed 池）
+            _en_part = en_query.split("\nEnglish keywords:")[0].strip()
+            for t in re.findall(r"[A-Za-z][A-Za-z0-9]{2,}", _en_part):
+                tokens.add(t.lower())
+        for t in re.findall(r"[一-鿿]{2,6}", user_query):
+            tokens.add(t)
+        if not tokens:
+            return []
+
+        injected: List[MetaPaper] = []
+        injected_seen = {basename_lower(p.filename) or p.title for p in current_papers}
+        for lang, db in self.meta_dbs.items():
+            _hits: Dict[str, list] = {}
+            for doc in self._meta_doc_values(db):
+                _low = doc.page_content.lower()
+                for tok in tokens:
+                    _lst = _hits.get(tok)
+                    if _lst is None:
+                        _hits[tok] = []
+                        _lst = _hits[tok]
+                    elif len(_lst) > _META_INJECT_CAP:
+                        continue  # 高频 token：停止追加，向量检索已覆盖
+                    if tok in _low:
+                        _lst.append(doc)
+            for tok, docs in _hits.items():
+                if len(docs) < 1 or len(docs) > _META_INJECT_CAP:
+                    continue
+                for doc in docs:
+                    md = doc.metadata or {}
+                    fname = norm_text(md.get("filename", "")) or norm_text(md.get("source", ""))
+                    uniq = basename_lower(fname) or md.get("title", "")
+                    if not fname or uniq in injected_seen:
+                        continue
+                    injected_seen.add(uniq)
+                    injected.append(MetaPaper(
+                        filename=fname,
+                        title=md.get("title", ""),
+                        authors=md.get("authors", ""),
+                        journal=md.get("journal", ""),
+                        year=md.get("year", ""),
+                        doi=md.get("doi", ""),
+                        score=0.1,  # 召回保底分：不冒充向量命中，排序由全文/重排决定
+                        meta_text=doc.page_content,
+                        lang=lang,
+                    ))
+                    if len(injected) >= _META_INJECT_MAX:
+                        return injected
+        return injected
 
     def choose_indexes(self, query_type: str) -> List[str]:
         """
