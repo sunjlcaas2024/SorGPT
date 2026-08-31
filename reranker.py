@@ -224,6 +224,7 @@ class Reranker:
                 granularity=hit.granularity,
                 lang=hit.lang,
                 section_type=hit.section_type,
+                bm25_score=hit.bm25_score,  # P0-1: 转发 BM25 分，供下方 density gate 读取
             ))
 
         reranked.sort(key=lambda x: x.final_score)

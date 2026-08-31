@@ -55,6 +55,29 @@ logger = logging.getLogger(__name__)
 # BM25 Scorer
 # ════════════════════════════════════════════════════════════════
 
+# ── zh-v7: 中文停用词 + jieba 懒加载 ─────────────────────────────
+# 中文 BM25 需要 jieba 分词；懒加载避免拖慢服务冷启动。
+_ZH_STOPWORDS = {
+    "的", "了", "在", "是", "和", "与", "及", "或", "之", "于", "被", "将",
+    "为", "以", "中", "对", "等", "并", "而", "从", "到", "向", "由", "把",
+    "让", "就", "都", "很", "也", "其", "这", "那", "个", "种", "一个",
+    "一种", "进行", "通过", "主要", "这些", "那些", "什么", "怎么", "如何",
+    "哪些", "多少", "是否", "以及", "但是", "因此", "本文", "研究", "分析",
+    "结果", "表明", "可以", "需要", "认为", "相关", "影响", "作用", "不同",
+    "其中", "之间", "或者", "还是",
+}
+
+_JIEBA = None
+
+
+def _get_jieba():
+    global _JIEBA
+    if _JIEBA is None:
+        import jieba  # 懒加载：不拖慢启动
+        _JIEBA = jieba
+    return _JIEBA
+
+
 class BM25Scorer:
     """
     BM25 scorer with pre-computed IDF over the chunk corpus.
@@ -69,9 +92,10 @@ class BM25Scorer:
         Default 0.75 is standard.
     """
 
-    def __init__(self, k1: float = 1.2, b: float = 0.75):
+    def __init__(self, k1: float = 1.2, b: float = 0.75, lang: str = "en"):
         self.k1 = k1
         self.b = b
+        self.lang = lang  # "en" 用英文 tokenizer；"zh" 用 jieba 中文分词
         self.idf: Dict[str, float] = {}
         self.avgdl: float = 0.0
         self.N: int = 0  # total number of documents in corpus
@@ -110,6 +134,41 @@ class BM25Scorer:
         return [t for t in tokens if len(t) >= 2]  # filter single chars
 
     @staticmethod
+    def tokenize_zh(text: str) -> List[str]:
+        """中英混合分词（zh-v7）：中文段 jieba.cut，英文/数字串整体保留小写。
+
+        中文 chunk 常含英文残留（基因名 DW3/SbTFL1、术语），故英文/数字段
+        走与原 tokenize 相同的正则逻辑（基因名不断开），中文段 jieba 切词
+        并滤除中文停用词。查询与语料双侧都必须用同一分词。
+        """
+        text = (text or "").strip()
+        if not text:
+            return []
+        jieba = _get_jieba()
+        out: List[str] = []
+        for seg in re.split(r"([一-鿿]+)", text):
+            if not seg:
+                continue
+            if seg[0] >= "一" and seg[0] <= "鿿":
+                # 纯中文段 → jieba 切词
+                for w in jieba.cut(seg):
+                    w = w.strip()
+                    if w and w not in _ZH_STOPWORDS:
+                        out.append(w)
+            else:
+                # 英文/数字段 → 原 tokenize 逻辑
+                seg_l = re.sub(r"[^a-z0-9\s\-_\.]", " ", seg.lower())
+                for t in seg_l.split():
+                    t = t.strip(".-_")
+                    if len(t) >= 2:
+                        out.append(t)
+        return out
+
+    def _tokenize_for_lang(self, text: str) -> List[str]:
+        """按 scorer 语言分发分词。英文路径与原有 tokenize 逐字节一致。"""
+        return self.tokenize_zh(text) if self.lang == "zh" else self.tokenize(text)
+
+    @staticmethod
     def normalize_text(text: str) -> str:
         """Basic text normalization (mirrors utils.norm_text)."""
         text = (text or "").strip()
@@ -138,7 +197,7 @@ class BM25Scorer:
         doc_lengths: List[int] = []
 
         for i, text in enumerate(texts):
-            tokens = self.tokenize(text)
+            tokens = self._tokenize_for_lang(text)
             if stopword_filter:
                 tokens = [t for t in tokens if t not in self._stopwords]
             unique_tokens = set(tokens)
@@ -251,8 +310,8 @@ class BM25Scorer:
             # IDF not built; fall back to simple overlap (backward compat)
             return self._simple_overlap_fallback(query, document)
 
-        q_tokens = self.tokenize(query)
-        d_tokens = self.tokenize(document)
+        q_tokens = self._tokenize_for_lang(query)
+        d_tokens = self._tokenize_for_lang(document)
 
         if stopword_filter:
             q_tokens = [t for t in q_tokens if t not in self._stopwords]
@@ -293,8 +352,8 @@ class BM25Scorer:
 
     def _simple_overlap_fallback(self, query: str, document: str) -> float:
         """Fallback when IDF is not available (same as old lexical overlap)."""
-        q_tokens = set(self.tokenize(query))
-        c_tokens = set(self.tokenize(document))
+        q_tokens = set(self._tokenize_for_lang(query))
+        c_tokens = set(self._tokenize_for_lang(document))
         if not q_tokens or not c_tokens:
             return 0.0
         return len(q_tokens & c_tokens) / max(1, len(q_tokens))
@@ -306,24 +365,25 @@ class BM25Scorer:
         data = {
             "k1": self.k1,
             "b": self.b,
+            "lang": self.lang,
             "idf": self.idf,
             "avgdl": self.avgdl,
             "N": self.N,
         }
         with open(path, "wb") as f:
             pickle.dump(data, f)
-        logger.info(f"BM25 scorer saved to {path} (N={self.N}, vocab={len(self.idf)})")
+        logger.info(f"BM25 scorer saved to {path} (N={self.N}, lang={self.lang}, vocab={len(self.idf)})")
 
     @classmethod
     def load(cls, path: str) -> "BM25Scorer":
         """Load pre-computed BM25 scorer from disk."""
         with open(path, "rb") as f:
             data = pickle.load(f)
-        scorer = cls(k1=data["k1"], b=data["b"])
+        scorer = cls(k1=data["k1"], b=data["b"], lang=data.get("lang", "en"))
         scorer.idf = data["idf"]
         scorer.avgdl = data["avgdl"]
         scorer.N = data["N"]
-        logger.info(f"BM25 scorer loaded from {path} (N={scorer.N}, vocab={len(scorer.idf)})")
+        logger.info(f"BM25 scorer loaded from {path} (N={scorer.N}, lang={scorer.lang}, vocab={len(scorer.idf)})")
         return scorer
 
 

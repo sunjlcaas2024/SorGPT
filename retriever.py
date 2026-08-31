@@ -39,6 +39,13 @@ _bm25_scorer: Optional["BM25Scorer"] = None
 _BM25_IDF_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bm25_idf.pkl")
 _BM25_WEIGHT = 0.25  # λ: BM25 weight in final_score (grid search optimal on eval set)
 
+# zh-v7: 中文 BM25（jieba 分词，独立中文 IDF）。与英文同模式懒加载。
+_bm25_zh_scorer: Optional["BM25Scorer"] = None
+_ZH_BM25_IDF_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "zh_bm25_idf.pkl")
+_ZH_BM25_WEIGHT = 0.15  # λ_zh 保守起步，A/B 0.15/0.20/0.25
+_ZH_BM25_CAP = 30.0     # 中文 BM25 归一化上限（校准: 30 题中文 × 2000 采样 chunk，raw p95=24.1/p100=33.2）
+_ZH_BM25_TOP = 100      # 每 zh 索引最多算 BM25 的向量序前 N 个存活候选（jieba 延迟控制）
+
 def _get_bm25() -> Optional["BM25Scorer"]:
     """Lazy-load BM25 scorer with pre-computed IDF."""
     global _bm25_scorer
@@ -50,6 +57,17 @@ def _get_bm25() -> Optional["BM25Scorer"]:
             # IDF not built yet; will fall back to simple overlap
             return None
     return _bm25_scorer
+
+def _get_bm25_zh() -> Optional["BM25Scorer"]:
+    """[zh-v7] Lazy-load Chinese BM25 scorer (jieba). None → 中文路径保持纯向量。"""
+    global _bm25_zh_scorer
+    if _bm25_zh_scorer is None:
+        if os.path.exists(_ZH_BM25_IDF_PATH):
+            from bm25_scorer import BM25Scorer
+            _bm25_zh_scorer = BM25Scorer.load(_ZH_BM25_IDF_PATH)
+        else:
+            return None
+    return _bm25_zh_scorer
 
 
 # ============ zh-v5: 中文检索查询重写 ============
@@ -115,6 +133,7 @@ class ChunkHit:
     granularity: str
     lang: str
     section_type: str = ""
+    bm25_score: float = 0.0  # zh-v7/P0-1: 归一化 BM25 分，供 reranker density gate 读取
 
 
 class Retriever:
@@ -331,6 +350,17 @@ class Retriever:
         # for scientific text queries
         return min(raw / 15.0, 1.0)
 
+    def _bm25_score_zh(self, query: str, content: str) -> float:
+        """[zh-v7] 中文 BM25（jieba 分词，独立中文 IDF），返回 [0,1]。
+
+        zh_bm25_idf.pkl 缺失时返回 0 → 与现状纯向量排序完全一致（零退化）。
+        """
+        bm25 = _get_bm25_zh()
+        if bm25 is None:
+            return 0.0
+        raw = bm25.score(query, content)
+        return min(raw / _ZH_BM25_CAP, 1.0)
+
     def retrieve_fulltext(self, user_query: str, en_keywords: str,
                           allowed_papers: List[MetaPaper],
                           query_type: str) -> List[ChunkHit]:
@@ -384,6 +414,9 @@ class Retriever:
             loaded = self.fulltext_dbs[index_name]
             store = loaded["store"]
             index = loaded["gpu_index"] if loaded["using_gpu"] and loaded["gpu_index"] is not None else loaded["cpu_index"]
+
+            # zh-v7: 每个 zh 索引的 BM25 预算（jieba 延迟控制）
+            zh_budget = _ZH_BM25_TOP if (is_cn and index_name.startswith("zh_")) else None
 
             # zh-v1: 混合检索时，英文补充索引只搜 TOP_CHUNK_K 个候选
             _search_k = TOP_CHUNK_K * _dynamic_mult
@@ -452,13 +485,26 @@ class Retriever:
                 # zh-v1: 中文混合池统一用向量相似度（lexical=0）：
                 #   BM25 tokenize 会把 CJK 字符替换为空格而失效，中文 chunk 只残留英文
                 #   token，与英文关键词匹配是噪声；且中英 BM25 尺度不一致会破坏混合池排序。
-                # 英文路径(is_cn=False)保持 BM25 不变。
-                lexical = 0.0 if is_cn else self._bm25_score(hybrid_query, doc.page_content)
+                # zh-v7: 中文路径引入 jieba 分词 + 独立中文 IDF，恢复 BM25 参与排序。
+                #   - 中文 zh_ 索引：用 zh-v5 重写后的 zh_query 打中文 BM25，权重 _ZH_BM25_WEIGHT；
+                #   - 英文路径(is_cn=False)：公式与参数完全不变，逐字节等价；
+                #   - 中文问题搜到的英文补充索引：维持纯向量（lexical=0，防中英尺度干扰）。
+                # zh-v7: jieba 分词慢，每 zh 索引只给向量序前 _ZH_BM25_TOP 个存活候选算 BM25。
+                if is_cn and index_name.startswith("zh_") and zh_budget:
+                    bm25_score = self._bm25_score_zh(zh_query, doc.page_content)
+                    lex_weight = _ZH_BM25_WEIGHT
+                    zh_budget -= 1
+                elif not is_cn:
+                    bm25_score = self._bm25_score(hybrid_query, doc.page_content)
+                    lex_weight = _BM25_WEIGHT
+                else:
+                    bm25_score = 0.0
+                    lex_weight = _BM25_WEIGHT
 
                 # FAISS index.search returns cosine similarity, higher = better.
                 # Negate to fit “smaller = better” sort convention.
                 raw_score = -float(score)
-                final_score = raw_score - _BM25_WEIGHT * lexical
+                final_score = raw_score - lex_weight * bm25_score
 
                 merged_hits.append(ChunkHit(
                     source=src,
@@ -468,6 +514,7 @@ class Retriever:
                     granularity=granularity,
                     lang=lang,
                     section_type=md.get("section_type", ""),
+                    bm25_score=bm25_score,
                 ))
 
         merged_hits.sort(key=lambda x: x.final_score)
