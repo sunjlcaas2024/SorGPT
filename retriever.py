@@ -265,9 +265,12 @@ class Retriever:
         _en_query = _build_en_query(user_query, en_keywords, _is_cn)
 
         for lang, db in self.meta_dbs.items():
-            _k = k
+            # zh-v10: meta 索引已重建为"整篇+句子级混合"（rebuild_meta_chunked.py，
+            # 2026-08-31），每篇论文占多条候选 → 统一翻倍搜索窗口，dedup 后仍能凑足
+            # 论文池；中文题英文库进一步放大（dedup 后仍凑足英文池 top-100）。
+            _k = k * 2
             if _is_cn and lang == "english":
-                _k = max(k, k * 2)  # 英文 meta 多取，扩大英文候选
+                _k = max(_k, k * 3)
             # zh-v8: 英文 meta 索引用英文翻译；中文 meta 索引用 zh-v5 重写；否则混合查询
             if lang == "english" and _en_query:
                 _q = _en_query
@@ -301,13 +304,15 @@ class Retriever:
         if _is_cn:
             # zh-v2: 中文问题按语言配额保底：英文 meta 直接保底进池（不参与全局排序淘汰），
             # 避免被中文分数挤掉，确保 allowed 池含足够英文文献供全文补充。
+            # zh-v10: 分数"更高=更相似"，两处 sort 必须 reverse（原升序保留最差论文，
+            # 英文语义题池子被中文/低分挤空——已被实体注入掩盖，广泛语义题暴露）。
             _en = sorted((p for p in papers if p.lang == "english"),
-                         key=lambda x: x.score)[: max(k // 3, 80)]
+                         key=lambda x: x.score, reverse=True)[: max(k // 3, 80)]
             _zh = sorted((p for p in papers if p.lang == "chinese"),
-                         key=lambda x: x.score)[: k]
+                         key=lambda x: x.score, reverse=True)[: k]
             papers = _en + _zh
         else:
-            papers.sort(key=lambda x: x.score)
+            papers.sort(key=lambda x: x.score, reverse=True)
             papers = papers[:k]
 
         # Gene index lookup: if query contains gene symbols, inject
@@ -398,6 +403,8 @@ class Retriever:
         for lang, db in self.meta_dbs.items():
             _hits: Dict[str, list] = {}
             for doc in self._meta_doc_values(db):
+                if (doc.metadata or {}).get("_sent"):
+                    continue  # zh-v10: 跳过句子级条目，按整篇计数（同论文多句不重复计数）
                 _low = doc.page_content.lower()
                 for tok in tokens:
                     _lst = _hits.get(tok)
