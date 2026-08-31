@@ -27,12 +27,13 @@ from langchain_community.vectorstores import FAISS
 from config import (
     META_INDEX_PATHS, FULLTEXT_INDEX_PATHS, TOP_META_K, TOP_CHUNK_K,
     COUNT_QUERY_FETCH_K, QUERY_TYPE_TO_INDEXES,
-    DEFAULT_NPROBE, USE_FAISS_GPU, GPU_DEVICE
+    DEFAULT_NPROBE, USE_FAISS_GPU, GPU_DEVICE, TRANSLATE_ZH_TO_EN
 )
 import json
 from utils import basename_lower, norm_text
 from metadata_loader import ZH_SKIP_JOURNALS
 from embeddings import BgeEmbeddingsWrapper
+from translator import translate_zh_to_en
 
 # BM25 scorer - lazy loaded
 _bm25_scorer: Optional["BM25Scorer"] = None
@@ -109,6 +110,21 @@ def _build_zh_retrieval_query(user_query: str) -> str:
     if core_cn and core_cn <= 3 and not any(k in core for k in _SG_CONTEXT):
         return core + "高粱"
     return core
+
+
+def _build_en_query(user_query: str, en_keywords: str, is_cn: bool) -> Optional[str]:
+    """zh-v8: 中文问题翻译成英文检索语句（含 en_keywords）。
+
+    - 非中文问题（is_cn=False）→ None（英文索引维持原混合向量，零影响）
+    - 翻译失败/开关关闭（TRANSLATE_ZH_TO_EN=False）→ None（回退 zh-v7）
+    - 成功 → "英文译文\\nEnglish keywords: en_keywords"
+    """
+    if not TRANSLATE_ZH_TO_EN or not is_cn:
+        return None
+    tr = translate_zh_to_en(user_query)
+    if not tr:
+        return None
+    return f"{tr}\nEnglish keywords: {en_keywords}" if en_keywords else tr
 
 
 @dataclass
@@ -239,12 +255,20 @@ class Retriever:
         # 供全文检索补充英文证据（株高/基础科学类中文语料不足）。
         _cn_chars = sum(1 for c in user_query if "一" <= c <= "鿿")
         _is_cn = _cn_chars / max(len(user_query), 1) > 0.15
+        # zh-v8: 中文问题翻译成英文，供英文 meta 索引用（决定 allowed_papers 英文候选池）
+        _en_query = _build_en_query(user_query, en_keywords, _is_cn)
 
         for lang, db in self.meta_dbs.items():
             _k = k
             if _is_cn and lang == "english":
                 _k = max(k, k * 2)  # 英文 meta 多取，扩大英文候选
-            _q = zh_query if (lang == "chinese" and zh_query != user_query) else hybrid_query
+            # zh-v8: 英文 meta 索引用英文翻译；中文 meta 索引用 zh-v5 重写；否则混合查询
+            if lang == "english" and _en_query:
+                _q = _en_query
+            elif lang == "chinese" and zh_query != user_query:
+                _q = zh_query
+            else:
+                _q = hybrid_query
             results = db.similarity_search_with_score(_q, k=_k)
             for doc, score in results:
                 md = doc.metadata or {}
@@ -375,6 +399,12 @@ class Retriever:
             return []
 
         allowed = {basename_lower(p.filename) for p in allowed_papers if p.filename}
+
+        # ── 查询语言判定（提前，供 zh-v5/zh-v8 检索查询与索引路由共用）──
+        chinese_chars = sum(1 for c in user_query if "一" <= c <= "鿿")
+        is_cn = chinese_chars / max(len(user_query), 1) > 0.15
+
+        # 中文路径: 混合查询仍作为 zh 索引回退与翻译失败兜底；英文路径(is_cn=False)不变
         hybrid_query = (f"{user_query}\nEnglish keywords: {en_keywords}"
                         if en_keywords else user_query)
 
@@ -382,6 +412,11 @@ class Retriever:
         zh_query = _build_zh_retrieval_query(user_query)
         zh_query_vec = (self.embed_model.embed_query_np(zh_query)
                         if zh_query != user_query else None)
+
+        # zh-v8: 中文问题翻译成英文，供英文索引向量检索 + 英文证据 BM25 词法打分
+        en_query = _build_en_query(user_query, en_keywords, is_cn)
+        en_query_vec = (self.embed_model.embed_query_np(en_query)
+                        if en_query else None)
 
         merged_hits: List[ChunkHit] = []
         seen = set()
@@ -393,8 +428,6 @@ class Retriever:
         chosen_indexes = self.choose_indexes(query_type)
 
         # ── 按查询语言过滤索引库：中文问题只搜中文库，英文问题只搜英文库 ──
-        chinese_chars = sum(1 for c in user_query if "一" <= c <= "鿿")
-        is_cn = chinese_chars / max(len(user_query), 1) > 0.15
         if is_cn:
             # zh-v1: 中文问题以中文索引为主，英文索引自动补充（以事实为主）。
             # 英文补充索引用较小 K，避免英文 chunk 淹没中文证据。
@@ -422,7 +455,12 @@ class Retriever:
             _search_k = TOP_CHUNK_K * _dynamic_mult
             if is_cn and index_name.startswith("en_"):
                 _search_k = TOP_CHUNK_K
-            _qvec = zh_query_vec if (zh_query_vec is not None and index_name.startswith("zh_")) else query_vec
+            # zh-v8: 按索引语言分流。zh 索引用 zh-v5 重写向量（原逻辑）；
+            # en 索引用英文翻译向量（中文题翻译成功时），否则回退混合向量。
+            if index_name.startswith("zh_"):
+                _qvec = zh_query_vec if zh_query_vec is not None else query_vec
+            else:
+                _qvec = en_query_vec if en_query_vec is not None else query_vec
             scores, ids = index.search(_qvec, _search_k)
 
             granularity = index_name.split("_")[-1]   # fine / std / large / para
@@ -490,10 +528,15 @@ class Retriever:
                 #   - 英文路径(is_cn=False)：公式与参数完全不变，逐字节等价；
                 #   - 中文问题搜到的英文补充索引：维持纯向量（lexical=0，防中英尺度干扰）。
                 # zh-v7: jieba 分词慢，每 zh 索引只给向量序前 _ZH_BM25_TOP 个存活候选算 BM25。
+                # zh-v8: 中文问题翻译成英文后，英文补充索引恢复 BM25 词法打分
+                #   （en_query = 英文翻译 + en_keywords，走英文 _bm25_score，CAP=15/权重 0.25）。
                 if is_cn and index_name.startswith("zh_") and zh_budget:
                     bm25_score = self._bm25_score_zh(zh_query, doc.page_content)
                     lex_weight = _ZH_BM25_WEIGHT
                     zh_budget -= 1
+                elif is_cn and index_name.startswith("en_") and en_query:
+                    bm25_score = self._bm25_score(en_query, doc.page_content)
+                    lex_weight = _BM25_WEIGHT
                 elif not is_cn:
                     bm25_score = self._bm25_score(hybrid_query, doc.page_content)
                     lex_weight = _BM25_WEIGHT
