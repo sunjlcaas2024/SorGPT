@@ -106,9 +106,9 @@ TRANSLATE_ZH_TO_EN = True
 
 # -----------------------------
 # zh-v9: 实体 token 低频召回注入（修复 meta 池截断漏检）
-# 中文题英文 meta 池只保留 top-100，会漏掉"摘要/正文才提到查询实体"的论文
-# （如 E048 T2T 组装的 Chen 2025 论文，向量 rank 155 被剔除）。
-# True = 查询中低频 token（E048/CHBZ/红缨子等）逐字扫 meta 文档，命中篇数
+# 纯向量 top-k 会漏掉"摘要/正文才提到查询实体"的论文（E048 只出现摘要、rank155 被
+# top-100 英文池剔除；hongyingzi 摘要论文 top-300 只进 3-6 篇）。中英文查询都生效。
+# True = 查询中低频 token（E048/CHBZ/hongyingzi 等）逐字扫 meta 文档，命中篇数
 #        ≤ _META_INJECT_CAP 的论文直接注入 allowed 池；False = 关闭（回退原行为）。
 # -----------------------------
 META_ENTITY_INJECT = True

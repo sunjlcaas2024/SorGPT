@@ -344,10 +344,12 @@ class Retriever:
         papers = papers[:k]
 
         # zh-v9: 实体 token 低频召回注入 —— 修复 meta 池截断漏检。
-        # 中文题英文 meta 池只保留 top-100，会漏掉"摘要/正文才提到查询实体"的论文
-        # （如 E048 T2T 组装的 Chen 2025 论文向量 rank155 被剔除，但全文检索本可命中）。
-        # 只在会用全文检索的问题类型注入（locate/count/boundary 直接返回，不改其答案）。
-        if META_ENTITY_INJECT and _is_cn and query_type not in ("locate", "count", "boundary"):
+        # 纯向量 top-k 会漏掉"摘要/正文才提到查询实体"的论文：BGE-M3 把整篇摘要嵌成
+        # 一个向量，hongyingzi/E048 等实体只在摘要出现一次时整篇向量更像其主题、排不进
+        # top-k（实测英文题 "Hongyingzi" 19 篇摘要含该词的论文 top-300 只进 3-6 篇）。
+        # 对查询低频 token 逐字扫 meta 文档，命中篇数 ≤ _META_INJECT_CAP 的论文直接
+        # 注入 allowed 池。中英文查询都生效（locate/count/boundary 不用全文，不改）。
+        if META_ENTITY_INJECT and query_type not in ("locate", "count", "boundary"):
             try:
                 _inject = self._meta_entity_inject(user_query, _en_query, papers)
                 if _inject:
