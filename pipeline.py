@@ -196,11 +196,31 @@ class SorghumRAGPipeline:
             conn = sqlite3.connect(dp)
             rows = conn.execute("SELECT gene_name,gene_id,trait,annotation,causative_variant,first_author,full_citation,doi FROM known_genes ORDER BY trait,gene_name").fetchall()
             conn.close()
-            lines = ["(KnownGenes)", "Cloned/validated sorghum genes:", ""]
+            # zh-v12: 逐基因补充 (GeneDB) Pfam 结构域（case-insensitive 匹配，同基因大小写变体可命中）
+            domain_map = {}
+            try:
+                gp = os.path.join(os.path.dirname(os.path.abspath(__file__)), "db", "sorghum_genes.db")
+                gc = sqlite3.connect(gp)
+                ids = [r[1] for r in rows if r[1] and r[1].lower() not in ("unknown", "na", "n/a", "")]
+                if ids:
+                    ph = ",".join("?" * len(ids))
+                    for gid, pid, pname in gc.execute(
+                        f"SELECT upper(gene_id), pfam_id, pfam_name FROM pfam "
+                        f"WHERE upper(gene_id) IN ({ph})", [i.upper() for i in ids]
+                    ).fetchall():
+                        domain_map.setdefault(gid, []).append(f"{pid}({pname})" if pname else pid)
+                gc.close()
+            except Exception:
+                pass  # 无 GeneDB 时降级为不展示结构域
+            lines = ["(KnownGenes)", "(GeneDB) Pfam structural domains:", "Cloned/validated sorghum genes:", ""]
             for r in rows:
-                gn,gid,tr,an,va,au,ci,doi = r
+                gn, gid, tr, an, va, au, ci, doi = r
                 dl = f"https://doi.org/{doi}" if doi and doi.strip() else (ci or "N/A")
-                lines.append(f"- {gn} ({gid}): {tr}. Function: {an or 'unknown'}. Variant: {va or 'N/A'}. Ref: {au} ({dl})")
+                dom = "; ".join(domain_map.get(gid.upper(), [])[:3]) if gid else ""
+                lines.append(
+                    f"- {gn} ({gid}): {tr}. Function: {an or 'unknown'}. "
+                    f"Structural domain: {dom or 'N/A'}. Variant: {va or 'N/A'}. Ref: {au} ({dl})"
+                )
             return "\n".join(lines)
         except Exception as e:
             return f"(KnownGenes) Error: {e}"
@@ -208,13 +228,14 @@ class SorghumRAGPipeline:
     def _build_cloned_gene_prompt(self, uq, ct):
         from prompt_builder import detect_language
         if detect_language(uq) == "chinese":
-            return f"你是SorGPT，高粱AI智能问答助手。请对以下已克隆/功能验证的高粱基因数据库进行简洁分析。\n\n## 你的任务\n对每一个克隆基因用表格一行简洁说明，不要逐个长篇展开。\n\n## 输出格式\n1. 总览：总结整体情况\n2. 分功能类别分析：按性状类别分组，每组包含表格(Gene Name | Gene ID | Molecular Function | Evidence | Reference)和一句小结\n3. 跨类别规律\n4. 研究前沿与展望\n5. 基因名和术语用英文，回答必须使用中文\n\n## 关键要求\n整篇回答控制在 700 字以内，用紧凑表格逐基因列出，优先讲重点；参考文献必须展示，不要编造Confidence等级\n\n{ct}"
-        return f"You are SorGPT, a world-class expert in sorghum genomics. Analyze the following cloned/functionally validated sorghum gene database.\n\n## Your Task\nProvide a concise entry for each cloned gene: one compact table row (Gene Name | Gene ID | Molecular Function | Evidence | Reference).\n\n## Output Format\n1. Overview\n2. Category Analysis with compact tables\n3. Cross-Category Patterns\n4. Frontiers & Outlook\n\n## Key Requirements\nKeep the entire answer under 700 words; use compact tables and prioritize key genes, stating total counts; show references; do not fabricate confidence levels\n\n{ct}"
+            return f"你是SorGPT，高粱AI智能问答助手。请对以下已克隆/功能验证的高粱基因数据库进行简洁分析。\n\n## 你的任务\n对每一个克隆基因用表格一行简洁说明，不要逐个长篇展开。\n\n## 输出格式\n1. 总览：总结整体情况\n2. 分功能类别分析：按性状类别分组，每组包含表格(基因名 | 基因ID | 结构域 | 功能 | 证据 | 参考文献)和一句小结\n3. 跨类别规律\n4. 研究前沿与展望\n5. 基因名和术语用英文，回答必须使用中文\n\n## 关键要求\n每个基因都要展示其蛋白结构域（来自提供的Pfam数据），未知时用\'—\'；整篇回答控制在 700 字以内，用紧凑表格逐基因列出，优先讲重点；参考文献必须展示，不要编造Confidence等级\n\n{ct}"
+        return f"You are SorGPT, a world-class expert in sorghum genomics. Analyze the following cloned/functionally validated sorghum gene database.\n\n## Your Task\nProvide a concise entry for each cloned gene: one compact table row (Gene Name | Gene ID | Structural Domain | Function | Evidence | Reference).\n\n## Output Format\n1. Overview\n2. Category Analysis with compact tables\n3. Cross-Category Patterns\n4. Frontiers & Outlook\n\n## Key Requirements\nShow the protein structural domain for EVERY gene (from the Pfam data provided); use \"—\" when unknown. Keep the entire answer under 700 words; use compact tables and prioritize key genes, stating total counts; show references; do not fabricate confidence levels\n\n{ct}"
 
     def _ask_with_cloned_genes(self, uq, ct):
         s = self._build_cloned_gene_prompt(uq, ct)
-        # zh-v11(speed): enable_thinking=False 关思考静默期；max_tokens=1500 硬截断兜底
-        a = self.generator.generate(uq, s, {}, enable_thinking=False, max_tokens=1500)
+        # zh-v11(speed): enable_thinking=False 关思考静默期；max_tokens=1800 硬截断兜底
+        # (zh-v12 加结构域列后输出变长，1500 可能截掉后部表格)
+        a = self.generator.generate(uq, s, {}, enable_thinking=False, max_tokens=1800)
         return {"query": uq, "query_type": "gene_list", "answer": a, "references": []}
 
     def _format_locate_answer(self, meta_hits: List[MetaPaper]) -> str:
@@ -511,11 +532,12 @@ class SorghumRAGPipeline:
         print(f"检索关键词: {en_keywords}")
         print("=" * 60)
         # 13. 生成答案（大模型只调用这一次，流式打印在 generator 内完成）
-        # zh-v11(speed): 此处 enable_thinking=True，思考 token 计入 max_tokens，
-        # 若设硬上限可能思考吃满预算→答案被截空。故主管线不设 max_tokens，
-        # 限长靠 prompt_builder 软性指令（review 800词 / gene_list 700字）约束。
+        # zh-v11(speed): enable_thinking=False——主管线关思考。
+        # 原因: (1) 思考阶段 40-70s 是主要耗时; (2) enable_thinking=True 时 DeepSeek
+        # 偶发"只输出思考、流即结束、无最终答案"（前端永远等不到 End of reasoning 标记）。
+        # 关思考后标记立即出现、答案立刻流式输出，短流更稳。答案仍由证据+prompt 约束质量。
         answer = self.generator.generate(
-            user_query, system_prompt, protected_map, enable_thinking=True
+            user_query, system_prompt, protected_map, enable_thinking=False
         )
         # 13b. 序列注入（sequence 类型）
         if query_type == "sequence":
@@ -565,7 +587,7 @@ class SorghumRAGPipeline:
             cloned_genes_text = self._get_cloned_genes_for_prompt()
             system = self._build_cloned_gene_prompt(user_query, cloned_genes_text)
             # zh-v11(speed): 与 ask() 一致，关思考 + max_tokens 硬截断
-            for chunk in self.generator.generate_stream(user_query, system, {}, enable_thinking=False, max_tokens=1500):
+            for chunk in self.generator.generate_stream(user_query, system, {}, enable_thinking=False, max_tokens=1800):
                 yield chunk
             # Send empty references for cloned gene answers
             import json as _json
@@ -614,11 +636,11 @@ class SorghumRAGPipeline:
         )
 
         # 13. 流式生成答案（同时累计正文，用于过滤参考文献）
-        # zh-v11(speed): 与 ask() 一致——enable_thinking=True 时不设 max_tokens，
-        # 防止思考吃满预算截空答案；限长靠 prompt_builder 软性指令。
+        # zh-v11(speed): 与 ask() 一致 enable_thinking=False——标记立即出现、
+        # 答案立刻流式输出，消除"只思考无答案"断流（详见 ask()）。
         answer_parts = []
         for chunk in self.generator.generate_stream(
-            user_query, system_prompt, protected_map, enable_thinking=True
+            user_query, system_prompt, protected_map, enable_thinking=False
         ):
             answer_parts.append(chunk)
             yield chunk
