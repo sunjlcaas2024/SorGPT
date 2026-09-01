@@ -532,13 +532,18 @@ class SorghumRAGPipeline:
         print(f"检索关键词: {en_keywords}")
         print("=" * 60)
         # 13. 生成答案（大模型只调用这一次，流式打印在 generator 内完成）
-        # zh-v11(speed): enable_thinking=False——主管线关思考。
-        # 原因: (1) 思考阶段 40-70s 是主要耗时; (2) enable_thinking=True 时 DeepSeek
-        # 偶发"只输出思考、流即结束、无最终答案"（前端永远等不到 End of reasoning 标记）。
-        # 关思考后标记立即出现、答案立刻流式输出，短流更稳。答案仍由证据+prompt 约束质量。
+        # zh-v13: 恢复 enable_thinking=True 保留推理质量；DeepSeek 偶发"只出思考
+        # 无最终答案"（或出错）时，关思考重试一次保证有答案。
         answer = self.generator.generate(
-            user_query, system_prompt, protected_map, enable_thinking=False
+            user_query, system_prompt, protected_map, enable_thinking=True
         )
+        if not answer.strip() or "[ERROR]" in answer:
+            # zh-v13 兜底：只出思考/出错 → 关思考重试，保证返回答案
+            print("[ask] 仅思考无答案，关思考重试", flush=True)
+            answer = self.generator.generate(
+                user_query, system_prompt, protected_map,
+                enable_thinking=False, max_tokens=1800
+            )
         # 13b. 序列注入（sequence 类型）
         if query_type == "sequence":
             if seq_block:
@@ -636,14 +641,26 @@ class SorghumRAGPipeline:
         )
 
         # 13. 流式生成答案（同时累计正文，用于过滤参考文献）
-        # zh-v11(speed): 与 ask() 一致 enable_thinking=False——标记立即出现、
-        # 答案立刻流式输出，消除"只思考无答案"断流（详见 ask()）。
+        # zh-v13: 恢复 enable_thinking=True 显示推理过程；若只出思考无答案
+        # （无 End of reasoning 标记），关思考重试一次保证有答案。
         answer_parts = []
+        got_marker = False
         for chunk in self.generator.generate_stream(
-            user_query, system_prompt, protected_map, enable_thinking=False
+            user_query, system_prompt, protected_map, enable_thinking=True
         ):
             answer_parts.append(chunk)
+            if "End of reasoning" in chunk:
+                got_marker = True
             yield chunk
+        if not got_marker:
+            # zh-v13 兜底：仅思考无答案 → 关思考重试（标记立即出现、答案直接流式）
+            print("[ask_stream] 仅思考无答案，关思考重试", flush=True)
+            for chunk in self.generator.generate_stream(
+                user_query, system_prompt, protected_map,
+                enable_thinking=False, max_tokens=1800
+            ):
+                answer_parts.append(chunk)
+                yield chunk
 
         # 13b. 序列注入（sequence 类型）
         if query_type == "sequence":
