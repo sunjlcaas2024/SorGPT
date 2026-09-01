@@ -228,14 +228,15 @@ class SorghumRAGPipeline:
     def _build_cloned_gene_prompt(self, uq, ct):
         from prompt_builder import detect_language
         if detect_language(uq) == "chinese":
-            return f"你是SorGPT，高粱AI智能问答助手。请对以下已克隆/功能验证的高粱基因数据库进行简洁分析。\n\n## 你的任务\n对每一个克隆基因用表格一行简洁说明，不要逐个长篇展开。\n\n## 输出格式\n1. 总览：总结整体情况\n2. 分功能类别分析：按性状类别分组，每组包含表格(基因名 | 基因ID | 结构域 | 功能 | 证据 | 参考文献)和一句小结\n3. 跨类别规律\n4. 研究前沿与展望\n5. 基因名和术语用英文，回答必须使用中文\n\n## 关键要求\n每个基因都要展示其蛋白结构域（来自提供的Pfam数据），未知时用\'—\'；整篇回答控制在 700 字以内，用紧凑表格逐基因列出，优先讲重点；参考文献必须展示，不要编造Confidence等级\n\n{ct}"
-        return f"You are SorGPT, a world-class expert in sorghum genomics. Analyze the following cloned/functionally validated sorghum gene database.\n\n## Your Task\nProvide a concise entry for each cloned gene: one compact table row (Gene Name | Gene ID | Structural Domain | Function | Evidence | Reference).\n\n## Output Format\n1. Overview\n2. Category Analysis with compact tables\n3. Cross-Category Patterns\n4. Frontiers & Outlook\n\n## Key Requirements\nShow the protein structural domain for EVERY gene (from the Pfam data provided); use \"—\" when unknown. Keep the entire answer under 700 words; use compact tables and prioritize key genes, stating total counts; show references; do not fabricate confidence levels\n\n{ct}"
+            return f"你是SorGPT，高粱AI智能问答助手。请对以下已克隆/功能验证的高粱基因数据库进行简洁分析。\n\n## 你的任务\n对每一个克隆基因用表格一行简洁说明，不要逐个长篇展开。\n\n## 输出格式\n1. 总览：总结整体情况\n2. 分功能类别分析：按性状类别分组，每组包含表格(基因名 | 基因ID | 结构域 | 功能 | 证据 | 参考文献)和一句小结\n3. 跨类别规律\n4. 研究前沿与展望\n5. 基因名和术语用英文，回答必须使用中文\n\n## 关键要求\n每个基因都要展示其蛋白结构域（来自提供的Pfam数据），未知时用\'—\'；逐基因一行紧凑表格，不要长篇展开；必须写完全部 4 个章节（完整回答比字数更重要），自由文本章节（总览/跨类别规律/前沿展望）各 2-4 句即可；参考文献必须展示，不要编造Confidence等级\n\n{ct}"
+        return f"You are SorGPT, a world-class expert in sorghum genomics. Analyze the following cloned/functionally validated sorghum gene database.\n\n## Your Task\nProvide a concise entry for each cloned gene: one compact table row (Gene Name | Gene ID | Structural Domain | Function | Evidence | Reference).\n\n## Output Format\n1. Overview\n2. Category Analysis with compact tables\n3. Cross-Category Patterns\n4. Frontiers & Outlook\n\n## Key Requirements\nShow the protein structural domain for EVERY gene (from the Pfam data provided); use \"—\" when unknown. One compact table row per gene — do not expand genes into paragraphs. Complete ALL four sections; a complete answer matters more than an arbitrary word cap, but keep free-text sections (Overview / Cross-Category Patterns / Frontiers & Outlook) to 2-4 sentences each. Show references; do not fabricate confidence levels\n\n{ct}"
 
     def _ask_with_cloned_genes(self, uq, ct):
         s = self._build_cloned_gene_prompt(uq, ct)
-        # zh-v11(speed): enable_thinking=False 关思考静默期；max_tokens=1800 硬截断兜底
-        # (zh-v12 加结构域列后输出变长，1500 可能截掉后部表格)
-        a = self.generator.generate(uq, s, {}, enable_thinking=False, max_tokens=1800)
+        # zh-v11(speed): enable_thinking=False 关思考静默期。
+        # zh-v14(fix): max_tokens 1800→3600——37 基因逐行表格+结构域列超出 1800 会被硬截断
+        # （用户报"回答不完整"）；3600 给足余量，thinking-off 下预算全用于内容。
+        a = self.generator.generate(uq, s, {}, enable_thinking=False, max_tokens=3600)
         return {"query": uq, "query_type": "gene_list", "answer": a, "references": []}
 
     def _format_locate_answer(self, meta_hits: List[MetaPaper]) -> str:
@@ -591,8 +592,8 @@ class SorghumRAGPipeline:
         if is_cloned and query_type in ("count", "gene_list", "mechanism", "factoid", "review", "gene_function"):
             cloned_genes_text = self._get_cloned_genes_for_prompt()
             system = self._build_cloned_gene_prompt(user_query, cloned_genes_text)
-            # zh-v11(speed): 与 ask() 一致，关思考 + max_tokens 硬截断
-            for chunk in self.generator.generate_stream(user_query, system, {}, enable_thinking=False, max_tokens=1800):
+            # zh-v14(fix): 与 ask() 一致 max_tokens 1800→3600，防 37 基因表格被截断
+            for chunk in self.generator.generate_stream(user_query, system, {}, enable_thinking=False, max_tokens=3600):
                 yield chunk
             # Send empty references for cloned gene answers
             import json as _json
