@@ -41,6 +41,9 @@ from translator import translate_zh_to_en
 _bm25_scorer: Optional["BM25Scorer"] = None
 _BM25_IDF_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bm25_idf.pkl")
 _BM25_WEIGHT = 0.25  # λ: BM25 weight in final_score (grid search optimal on eval set)
+# zh-v15b: general 类型英文 BM25 权重上调(0.25→0.45) — 词法强相关的特定证据
+# (T2T 组装标题命中、实体盘点)压过纯向量分高的泛基因组论文，保证盘点类回答完整
+_GENERAL_BM25_WEIGHT = 0.45
 
 # zh-v7: 中文 BM25（jieba 分词，独立中文 IDF）。与英文同模式懒加载。
 _bm25_zh_scorer: Optional["BM25Scorer"] = None
@@ -556,7 +559,9 @@ class Retriever:
 
             # zh-v1: 混合检索时，英文补充索引只搜 TOP_CHUNK_K 个候选
             _search_k = TOP_CHUNK_K * _dynamic_mult
-            if is_cn and index_name.startswith("en_"):
+            # zh-v15b: general 类型中文题解锁英文索引候选（30→×8=240），
+            # 抓回被 30 上限切掉的深度相关英文 chunk（如 E048 论文列 T2T 组装的 intro 段）
+            if is_cn and index_name.startswith("en_") and query_type != "general":
                 _search_k = TOP_CHUNK_K
             # zh-v8: 按索引语言分流。zh 索引用 zh-v5 重写向量（原逻辑）；
             # en 索引用英文翻译向量（中文题翻译成功时），否则回退混合向量。
@@ -639,7 +644,7 @@ class Retriever:
                     zh_budget -= 1
                 elif is_cn and index_name.startswith("en_") and en_query:
                     bm25_score = self._bm25_score(en_query, doc.page_content)
-                    lex_weight = _BM25_WEIGHT
+                    lex_weight = _GENERAL_BM25_WEIGHT if query_type == "general" else _BM25_WEIGHT
                 elif not is_cn:
                     bm25_score = self._bm25_score(hybrid_query, doc.page_content)
                     lex_weight = _BM25_WEIGHT

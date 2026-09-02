@@ -267,8 +267,13 @@ class Reranker:
             hits = [h for h in hits if basename_lower(h.source) in _keep_papers]
 
         # 不同问题类型每篇最多多少 chunk
-        if query_type in {"review", "gene_list", "general"}:
+        # zh-v15b: general 从 1→3 —— 盘点/综述类问题需从关键论文取多个 chunk，
+        # 否则 max_per_source=1 只保留单篇最佳 chunk（常是关键词/作者垃圾块），
+        # 论文内真正相关的深度内容（摘要 T2T 陈述、对比章节）被切掉 → 回答不完整
+        if query_type in {"review", "gene_list"}:
             max_per_source = 1      # 综述类强制多样性
+        elif query_type == "general":
+            max_per_source = 3
         elif query_type in {"mechanism", "qtl_gwas"}:
             max_per_source = 2
         else:
