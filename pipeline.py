@@ -25,7 +25,8 @@ import os
 from typing import Dict, Any, List, Iterator, Tuple, Optional, Set
 from config import (CSV_PATHS, REFERENCE_LIMITS, COUNT_QUERY_MAX_SHOW, CLASSIFY_SIMPLIFIED,
                     ABSTRACT_INJECT, ABSTRACT_INJECT_TYPES, ABSTRACT_INJECT_MAX,
-                    ABSTRACT_INJECT_OVERLAP)
+                    ABSTRACT_INJECT_OVERLAP, ROSTER_INJECT, ROSTER_INJECT_TYPES,
+                    ROSTER_INJECT_MAX)
 from embeddings import BgeEmbeddingsWrapper
 from metadata_loader import load_citation_map, safe_get_ref_info
 from query_classifier import classify_query_type, classify_simplified
@@ -47,6 +48,10 @@ _NOISE_RE = re.compile(
     r"©\s*\d{4}|all rights reserved|www\.\S+\.\S+",
     re.IGNORECASE,
 )
+
+# zh-v16: T2T 基因组盘点信号（识别"哪些品种完成了端粒到端粒组装"类题）
+_ROSTER_SIG_RE = re.compile(r"端粒到端粒|端粒|telomere-to-telomere|\bT2T\b", re.IGNORECASE)
+_ROSTER_ASM_RE = re.compile(r"组装|assembly|基因组", re.IGNORECASE)
 
 def _clean_chunk_preview(content: str, max_chars: int = 280) -> str:
     """
@@ -537,6 +542,81 @@ class SorghumRAGPipeline:
             print(f"[WARN] abstract_inject 失败: {_e}", flush=True)
             return selected_hits
 
+    # ------------------------------------------------------------------
+    # zh-v16: T2T 基因组盘点身份注入（与 zh-v15c 池内摘要注入互补）
+    # 现象：语料内每品种的独立 T2T 论文(Ding 2024 Crop J=HYZ、Bao 2024 Plant
+    # Comm=HYZ+HDN、Li 2024 Sci Data=CHBZ、Wang 2025=654、Chen 2025=E048…)meta
+    # 都在 allowed 池，但个别论文(Ding 全文仅摘要兜底~664 字符)的全文 identity
+    # chunk FAISS 向量窗口(240/索引)够不到 → 模型盘点"H 品种有 T2T 组装"却给
+    # 不出独立论文，只能引综述。zh-v15c 只对"已在池内"的论文补摘要，够不到
+    # 池外论文 → 此处对带 T2T 组装身份的英文 meta 整篇(池外)补身份，模型可把
+    # 品种对到独立论文。仅中文 general/review + T2T 组装信号触发，零英文影响。
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _is_t2t_roster_query(user_query: str) -> bool:
+        cn = sum(1 for c in user_query or "" if "一" <= c <= "鿿")
+        if cn / max(len(user_query or ""), 1) <= 0.15:
+            return False
+        return bool(_ROSTER_SIG_RE.search(user_query)
+                    and _ROSTER_ASM_RE.search(user_query))
+
+    def _inject_roster_identities(self, selected_hits: List[ChunkHit],
+                                  query_type: str, user_query: str) -> List[ChunkHit]:
+        """T2T 盘点：把不在最终池、但 meta 具 T2T 组装身份的英文论文摘要补进池。"""
+        if not (ROSTER_INJECT and query_type in ROSTER_INJECT_TYPES and selected_hits):
+            return selected_hits
+        if not self._is_t2t_roster_query(user_query):
+            return selected_hits
+        try:
+            db = self.retriever.meta_dbs.get("english")
+            if db is None:
+                return selected_hits
+            in_pool = {basename_lower(h.source) for h in selected_hits}
+            cand = []  # (filename, abstract)
+            seen = set()
+            for doc in self.retriever._meta_doc_values(db):
+                md = doc.metadata or {}
+                if md.get("_sent"):
+                    continue  # 整篇计数（句子级不参与）
+                fname = norm_text(md.get("filename", "")) or norm_text(md.get("source", ""))
+                if not fname:
+                    continue
+                key = basename_lower(fname)
+                if not key or key in seen:
+                    continue
+                content = doc.page_content or ""
+                if not (_ROSTER_SIG_RE.search(content)
+                        and _ROSTER_ASM_RE.search(content)):
+                    continue
+                seen.add(key)
+                if key in in_pool:
+                    continue  # 池内论文由 zh-v15c 池内摘要注入负责
+                ab = self._extract_abstract(content)
+                if ab:
+                    cand.append((key, fname, ab))
+            if not cand:
+                return selected_hits
+            # 有摘要的先补（Ding 664 字符摘要 > 空摘要论文）；最多 ROSTER_INJECT_MAX 篇
+            cand.sort(key=lambda c: -len(c[2]))
+            cand = cand[:ROSTER_INJECT_MAX]
+            out = list(selected_hits)
+            for key, fname, ab in cand:
+                out.append(ChunkHit(
+                    source=fname,
+                    content=f"[该文献摘要] {ab}",
+                    raw_score=0.0,
+                    final_score=0.0,
+                    granularity="meta",
+                    lang="en",
+                    section_type="abstract",
+                ))
+            print(f"[ask] roster 注入 {len(cand)} 篇池外 T2T 论文: "
+                  + ", ".join(basename_lower(c[0])[:44] for c in cand), flush=True)
+            return out
+        except Exception as _e:
+            print(f"[WARN] roster_inject 失败: {_e}", flush=True)
+            return selected_hits
+
     def ask(self, user_query: str) -> Dict[str, Any]:
         """
         SorGPT 主入口函数。
@@ -646,6 +726,10 @@ class SorghumRAGPipeline:
         # 修复"论文标题泛化 + 全文 identity chunk 未召回 → 模型认不出论文贡献主体"。
         if selected_hits:
             selected_hits = self._inject_paper_abstracts(selected_hits, meta_hits, query_type, user_query)
+        # zh-v16: T2T 盘点补池外 T2T 独立论文身份（如 Ding 2024 Crop J=HYZ）——
+        # 全文 identity chunk 进不了向量窗口，但 meta 摘要点名品种，补进池即可配对。
+        if selected_hits:
+            selected_hits = self._inject_roster_identities(selected_hits, query_type, user_query)
         system_prompt, protected_map, source_index = build_system_prompt(
             user_query, query_type, selected_hits, extra_types=extra_types, seq_context=seq_ctx
         )
@@ -766,6 +850,9 @@ class SorghumRAGPipeline:
         # 修复"论文标题泛化 + 全文 identity chunk 未召回 → 模型认不出论文贡献主体"。
         if selected_hits:
             selected_hits = self._inject_paper_abstracts(selected_hits, meta_hits, query_type, user_query)
+        # zh-v16: T2T 盘点补池外 T2T 独立论文身份（如 Ding 2024 Crop J=HYZ）。
+        if selected_hits:
+            selected_hits = self._inject_roster_identities(selected_hits, query_type, user_query)
         system_prompt, protected_map, source_index = build_system_prompt(
             user_query, query_type, selected_hits, extra_types=extra_types, seq_context=seq_ctx
         )

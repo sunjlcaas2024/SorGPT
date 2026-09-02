@@ -137,6 +137,20 @@ ABSTRACT_INJECT_OVERLAP = 0.75                   # 逐chunk: 某池内chunk与�
                                                  # 该摘要已近逐字在池，跳过(防重复注入)
 
 # -----------------------------
+# zh-v16: T2T 基因组盘点身份注入（修复"有哪些品种完成了端粒到端粒组装"漏配独立论文）
+# Ding 2024 Crop J(=Hongyingzi) 等 T2T 独立论文：meta 在 allowed 池，但全文 identity
+# chunk FAISS 向量窗口(240/索引)够不到(论文薄/摘要专用措辞) → 模型盘点只能借综述
+# 引"某品种有 T2T 组装"却给不出独立论文。
+# 机制：中文 general/review 题命中 T2T 组装信号时，全量扫英文 meta 整篇文档，把
+# 带 "telomere-to-telomere/T2T + assembly" 身份的论文 meta 摘要补进证据池(≤N 篇，
+# 补非池内论文——zh-v15c 的池内摘要注入管不到它)，让每个品种对上独立论文。
+# True = 开启；False = 回退原行为。
+# -----------------------------
+ROSTER_INJECT = True
+ROSTER_INJECT_TYPES = ("general", "review")      # 仅盘点/综述类需要逐品种论文身份
+ROSTER_INJECT_MAX = 8                            # 单次最多补入的池外 T2T 论文数(token 保护)
+
+# -----------------------------
 # 各问题类型的参考文献上限
 # -----------------------------
 REFERENCE_LIMITS = {

@@ -262,15 +262,47 @@ def _is_review(q): return any(p in q for p in [
     "异同","相同点","不同点","对比","相比","与...相比",
 ])
 
+# zh-v16: 裸 "有哪些" 不能盲目当基因清单。过去"高粱有哪些品种完成了T2T基因组组装?
+# 分别列出对应论文。" 因含 "有哪些" 被误判 gene_list → 丢掉 general 的盘点模板 + T2T
+# 检索修复(en×8 候选解锁/池内摘要注入/roster 身份注入)。仅当枚举对象是基因域元件
+# (基因/转录因子/蛋白/克隆…) 才算基因清单；后接 品种/论文/研究/基因组 等盘点对象
+# 名词的实体盘点，交由 general 盘点路径。
+_NON_GENE_LIST_NOUNS = (
+    "品种","品系","种质","论文","文献","文章","研究","综述","进展","报道",
+    "数据库","资源","平台","工具","技术","方法","软件","网站",
+    "物种","基因组","染色体","转录组","蛋白组","代谢物","化合物",
+    "群体","材料","细胞","组织","器官","地区","国家","公司","数据库",
+    "marker","markers","pathway","pathways","qtl","qtls","locus","loci",
+)
+# 基因域阳性信号：这些词出现说明查询在列基因/蛋白/转录因子（"基因组"里的"基因"不算——
+# 盘点的是基因组/染色体，不是基因；"蛋白组"同理排除）
+_GENE_POS_RE = re.compile(
+    r"基因(?!组)|转录因子|蛋白(?!组)|基因家族|克隆|what genes|which genes|TF\b",
+    re.IGNORECASE,
+)
+
+def _bare_listing_genes(q):
+    """裸 "有哪些" 是否在列基因清单。有基因域阳性词 → 是；
+    否则紧跟盘点对象名词(品种/论文/研究/基因组等) → 否；其余维持原 gene_list 判定。"""
+    m = re.search(r"有哪些", q)
+    if not m:
+        return False
+    if _GENE_POS_RE.search(q):
+        return True
+    after = q[m.end():].lstrip(" ，,、的")
+    if after and after.startswith(_NON_GENE_LIST_NOUNS):
+        return False
+    return True
+
 def _is_gene_list(q): return any(p in q for p in [
-    "有哪些基因","哪些基因","关键基因","已知基因","鉴定到的基因","候选基因","相关基因","功能基因","调控基因","有哪些","相关的基因",
+    "有哪些基因","哪些基因","关键基因","已知基因","鉴定到的基因","候选基因","相关基因","功能基因","调控基因","相关的基因",
     "有哪些转录因子","what genes","which genes","genes involved in",
     "genes associated with","genes controlling","key genes for",
     # zh-v11: "已克隆/已鉴定基因"类问题 → 基因清单（否则落 review 兜底生成长文，慢）
     "已克隆基因","克隆的基因","已克隆的基因","已鉴定基因","鉴定出的基因","已鉴定的基因",
     "cloned genes","genes have been cloned","identified genes","genes identified",
     "genes have been identified","genes were identified",
-])
+]) or _bare_listing_genes(q)
 
 def _is_mechanism(q): return any(p in q for p in [
     "机制","通路","调控","信号","互作","如何","怎么",
