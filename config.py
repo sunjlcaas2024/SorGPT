@@ -123,6 +123,20 @@ META_ENTITY_INJECT = True
 CLASSIFY_SIMPLIFIED = True
 
 # -----------------------------
+# zh-v15c: 证据摘要注入（修复"论文标题泛化 + 全文 identity chunk 未召回"）
+# 现象：语料含 Li 2024 "Telomere-to-telomere genome assembly of sorghum"(=CHBZ 撮罗巴子
+# 独立 T2T 论文)，但其点名 CHBZ 的全文 chunk FAISS 原始排名 >2000（唯一身份载体是 meta
+# 摘要）。通用引言 chunk 排 #0 进池 → 模型看到论文却认不出它组装的品系 → 盘点漏报 CHBZ。
+# 机制：diversify_and_trim 定池后，给池内论文补其 meta Abstract 段（同 source 追加，
+# 合并进原引用编号，无幽灵引用），让模型拿到"该论文贡献主体是谁"的摘要身份。
+# True = 对池内论文注入摘要；False = 回退原行为。
+ABSTRACT_INJECT = True
+ABSTRACT_INJECT_TYPES = ("general", "review")   # 仅盘点/综述类问题需要逐论文身份
+ABSTRACT_INJECT_MAX = 6                          # 单次最多注入 N 篇论文的摘要（token 保护）
+ABSTRACT_INJECT_OVERLAP = 0.75                   # 逐chunk: 某池内chunk与摘要重叠≥该值→
+                                                 # 该摘要已近逐字在池，跳过(防重复注入)
+
+# -----------------------------
 # 各问题类型的参考文献上限
 # -----------------------------
 REFERENCE_LIMITS = {

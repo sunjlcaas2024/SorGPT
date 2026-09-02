@@ -23,7 +23,9 @@ import re
 import json
 import os
 from typing import Dict, Any, List, Iterator, Tuple, Optional, Set
-from config import CSV_PATHS, REFERENCE_LIMITS, COUNT_QUERY_MAX_SHOW, CLASSIFY_SIMPLIFIED
+from config import (CSV_PATHS, REFERENCE_LIMITS, COUNT_QUERY_MAX_SHOW, CLASSIFY_SIMPLIFIED,
+                    ABSTRACT_INJECT, ABSTRACT_INJECT_TYPES, ABSTRACT_INJECT_MAX,
+                    ABSTRACT_INJECT_OVERLAP)
 from embeddings import BgeEmbeddingsWrapper
 from metadata_loader import load_citation_map, safe_get_ref_info
 from query_classifier import classify_query_type, classify_simplified
@@ -32,7 +34,7 @@ from reranker import Reranker
 from prompt_builder import build_system_prompt
 from generator import AnswerGenerator
 from sequence_fetcher import resolve_genes_from_query, build_sequence_blocks, detect_seq_type
-from utils import build_citation_string, norm_text
+from utils import build_citation_string, norm_text, basename_lower
 
 # -----------------------------
 # 证据片段清洗（修复：去掉参考文献行、页眉页脚残留）
@@ -422,6 +424,119 @@ class SorghumRAGPipeline:
         parts = [k.strip() for k in en_keywords.split(",") if k.strip()]
         return parts[:4]
 
+    # ------------------------------------------------------------------
+    # zh-v15c: 证据摘要注入
+    # 给最终池论文补充其 meta 摘要(Abstract 段)，让模型拿到"该论文贡献主体
+    # 是谁"的身份锚点。修复：论文标题泛化(如 Li 2024 "Telomere-to-telomere
+    # genome assembly of sorghum"=CHBZ) + 全文 identity chunk 未召回(FAISS
+    # rank>2000) → 模型看到论文却认不出它组装的品系，盘点类回答漏报。
+    # 注入 chunk 与池内 chunk 同 source → 合并进同一引用编号，无幽灵引用。
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _extract_abstract(meta_text: str) -> str:
+        """从 meta 文档正文提取 Abstract 段（取最后一个 Abstract: 之后，去重复行）。"""
+        if not meta_text:
+            return ""
+        idx = meta_text.rfind("Abstract:")
+        if idx < 0:
+            return ""
+        text = meta_text[idx + len("Abstract:"):]
+        lines, seen = [], set()
+        for ln in text.splitlines():
+            s = ln.strip()
+            if s and s not in seen:
+                seen.add(s)
+                lines.append(s)
+        ab = " ".join(lines).strip()
+        return ab[:1500]
+
+    @staticmethod
+    def _near_verbatim(a: str, b: str) -> float:
+        """近逐字判定：字符级 SequenceMatcher 相似度(0~1)。
+        同论文"泛化引言 chunk"与摘要共享主题词但句式不同 → 低分(~0.3-0.45)；
+        摘要段原文在池内(整段逐字) → 高分(≥0.75)。"""
+        try:
+            from difflib import SequenceMatcher
+            return SequenceMatcher(None, a or "", b or "").ratio()
+        except Exception:
+            return 0.0
+
+    def _inject_paper_abstracts(self, selected_hits: List[ChunkHit],
+                                meta_hits: List[MetaPaper],
+                                query_type: str, user_query: str) -> List[ChunkHit]:
+        """定池后，给池内论文补 meta 摘要（仅中文 general/review，最多 N 篇，防 token 膨胀）。
+        中文门控：zh-v15c 修的是中文检索 identity 缺失；英文路径保持逐字节不变。"""
+        if not (ABSTRACT_INJECT and query_type in ABSTRACT_INJECT_TYPES and selected_hits):
+            return selected_hits
+        cn = sum(1 for c in user_query if "一" <= c <= "鿿")
+        if cn / max(len(user_query or ""), 1) <= 0.15:
+            return selected_hits
+        try:
+            # 1) meta 摘要映射: basename -> 该论文摘要（取第一篇有摘要的）
+            meta_ab = {}
+            for p in meta_hits:
+                key = basename_lower(p.filename)
+                if not key:
+                    continue
+                if key in meta_ab:
+                    continue
+                ab = self._extract_abstract(p.meta_text)
+                if ab:
+                    meta_ab[key] = ab
+            if not meta_ab:
+                return selected_hits
+            # 2) 池内按 source 分组
+            from collections import defaultdict
+            by_src = defaultdict(list)
+            for h in selected_hits:
+                by_src[basename_lower(h.source)].append(h)
+            # 3) 有摘要、且池内没有"近逐字=该摘要"的 chunk 才注入。
+            #    守卫必须是序列级近逐字判定(整段摘要原文在池内 → 跳过防重复)。
+            #    ✗ 词袋重叠(早期实现)不可用：同论文泛化引言 chunk 与摘要共享
+            #      T2T/gap-free/genome/assembly 等主题词，min() 使比例虚高，会误杀
+            #      真正缺身份的论文(Li 2024 摘要与引言 chunk 重叠≥0.75 → 漏注入)。
+            cand = []
+            for src_key, hits in by_src.items():
+                ab = meta_ab.get(src_key)
+                if not ab:
+                    continue
+                mx = max((self._near_verbatim(ab, h.content) for h in hits),
+                         default=0.0)
+                if mx >= ABSTRACT_INJECT_OVERLAP:
+                    # 池内已有该摘要近逐字原文 → 身份已在，跳过
+                    print(f"[ask] 摘要注入 SKIP(近逐字) {src_key[:48]} sim={mx:.2f}", flush=True)
+                    continue
+                best_raw = max(h.raw_score for h in hits)
+                best_fin = min(h.final_score for h in hits)   # final 越低越相关
+                print(f"[ask] 摘要注入 候选 {src_key[:44]} sim={mx:.2f} "
+                      f"raw={best_raw:.3f} fin={best_fin:.3f}", flush=True)
+                cand.append((src_key, hits[0].source, ab, best_raw, best_fin))
+            # 按池内证据对查询的相关性(final_score)排序，raw_score 跨库不可比，
+            # 会被叶绿体/GATA 等噪声论文顶掉真正缺身份的 T2T 论文。
+            cand.sort(key=lambda x: x[4])
+            cand = cand[:ABSTRACT_INJECT_MAX]
+            if not cand:
+                return selected_hits
+            # 4) 追加到证据末尾（同 source → 原引用编号不变）
+            out = list(selected_hits)
+            for src_key, src, ab, _raw, _fin in cand:
+                ref_h = by_src[src_key][0]
+                out.append(ChunkHit(
+                    source=src,
+                    content=f"[该文献摘要] {ab}",
+                    raw_score=ref_h.raw_score,
+                    final_score=ref_h.final_score,
+                    granularity="meta",
+                    lang=ref_h.lang,
+                    section_type="abstract",
+                ))
+            print(f"[ask] 摘要注入 {len(cand)} 篇: "
+                  + ", ".join(basename_lower(c[1])[:40] for c in cand), flush=True)
+            return out
+        except Exception as _e:
+            print(f"[WARN] abstract_inject 失败: {_e}", flush=True)
+            return selected_hits
+
     def ask(self, user_query: str) -> Dict[str, Any]:
         """
         SorGPT 主入口函数。
@@ -527,6 +642,10 @@ class SorghumRAGPipeline:
                 "evidence_text": "",
             }
         # 12. 构建 system prompt
+        # zh-v15c: 定池后补池内论文 meta 摘要（同 source → 合并进原引用编号，无幽灵引用）。
+        # 修复"论文标题泛化 + 全文 identity chunk 未召回 → 模型认不出论文贡献主体"。
+        if selected_hits:
+            selected_hits = self._inject_paper_abstracts(selected_hits, meta_hits, query_type, user_query)
         system_prompt, protected_map, source_index = build_system_prompt(
             user_query, query_type, selected_hits, extra_types=extra_types, seq_context=seq_ctx
         )
@@ -643,6 +762,10 @@ class SorghumRAGPipeline:
             return
 
         # 12. 构建 system prompt
+        # zh-v15c: 定池后补池内论文 meta 摘要（同 source → 合并进原引用编号，无幽灵引用）。
+        # 修复"论文标题泛化 + 全文 identity chunk 未召回 → 模型认不出论文贡献主体"。
+        if selected_hits:
+            selected_hits = self._inject_paper_abstracts(selected_hits, meta_hits, query_type, user_query)
         system_prompt, protected_map, source_index = build_system_prompt(
             user_query, query_type, selected_hits, extra_types=extra_types, seq_context=seq_ctx
         )
