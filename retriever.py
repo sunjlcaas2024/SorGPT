@@ -252,7 +252,7 @@ class Retriever:
                         if en_keywords else user_query)
         # zh-v5: 中文索引用重写后的检索 query（剥离泛化动词+短实体补高粱锚点）
         zh_query = _build_zh_retrieval_query(user_query)
-        k = COUNT_QUERY_FETCH_K if query_type in ("count", "review", "gene_list") else TOP_META_K
+        k = COUNT_QUERY_FETCH_K if query_type in ("count", "review", "gene_list", "general") else TOP_META_K
 
         papers: List[MetaPaper] = []
         seen = set()
@@ -527,7 +527,7 @@ class Retriever:
         query_vec = self.embed_model.embed_query_np(hybrid_query)
 
         # Dynamic TOP_K: count/review types need more candidates to compensate for paper recall
-        _dynamic_mult = 8 if query_type in ("count", "review", "gene_list") else 4
+        _dynamic_mult = 8 if query_type in ("count", "review", "gene_list", "general") else 4
         chosen_indexes = self.choose_indexes(query_type)
 
         # ── 按查询语言过滤索引库：中文问题只搜中文库，英文问题只搜英文库 ──
@@ -605,7 +605,7 @@ class Retriever:
                             overlap_ratio = len(words_new & words_old) / min(len(words_new), len(words_old))
                             if overlap_ratio > 0.7:
                                 # Keep the granularity that better matches query_type
-                                preferred_gran = {"review": "para", "mechanism": "para", "gene_list": "para"}.get(query_type, "fine")
+                                preferred_gran = {"review": "para", "mechanism": "para", "gene_list": "para", "general": "para"}.get(query_type, "fine")
                                 if granularity == preferred_gran and prev_gran != preferred_gran:
                                     # Replace previous with this one
                                     merged_hits = [h for h in merged_hits if not (h.source == src_key and h.granularity == prev_gran)]

@@ -114,6 +114,15 @@ TRANSLATE_ZH_TO_EN = True
 META_ENTITY_INJECT = True
 
 # -----------------------------
+# simplified（调试版）：除基因问题外不再划分问题类型
+# True = 非基因问题统一走 'general' 通用模板（新模板，非 review）；
+#        基因问题(gene_list/gene_function/count/序列/克隆) + 确定性处理器
+#        (count/locate/boundary) 保留专用路径。QTL/GWAS 按用户确认并入 general。
+# False = 回退 9 类完整分类路由（原生产行为）。
+# -----------------------------
+CLASSIFY_SIMPLIFIED = True
+
+# -----------------------------
 # 各问题类型的参考文献上限
 # -----------------------------
 REFERENCE_LIMITS = {
@@ -123,6 +132,7 @@ REFERENCE_LIMITS = {
     "qtl_gwas":     12,
     "locate":       3,
     "review":       15,
+    "general":      15,
     "gene_list":    15,
     "count":        20,
     "boundary":     0,
@@ -139,6 +149,7 @@ EVIDENCE_LIMITS = {
     "qtl_gwas":     16,
     "locate":       0,
     "review":       24,
+    "general":      24,
     "gene_list":    24,
     "count":        0,
     "boundary":     0,
@@ -154,6 +165,7 @@ QUERY_TYPE_TO_INDEXES = {
     "mechanism":    ["en_std", "en_large", "en_fine", "en_para", "zh_std", "zh_large", "zh_fine"],
     "qtl_gwas":     ["en_std", "en_fine", "en_large", "zh_std", "zh_fine", "zh_large"],
     "review":       ["en_para", "en_large", "en_std", "en_fine", "zh_large", "zh_std", "zh_fine"],
+    "general":      ["en_para", "en_large", "en_std", "en_fine", "zh_large", "zh_std", "zh_fine"],
     "gene_list":    ["en_fine", "en_std", "en_large", "en_para", "zh_fine", "zh_std", "zh_large"],
     "locate":       [],
     "count":        [],

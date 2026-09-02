@@ -192,7 +192,7 @@ class Reranker:
             }.get(hit.granularity, 0.0)
 
             # 问题类型 × 粒度的交叉加成
-            if query_type in {"review", "mechanism"} and hit.granularity == "para":
+            if query_type in {"review", "mechanism", "general"} and hit.granularity == "para":
                 gran_bonus = 0.20
             elif query_type in {"factoid", "gene_function"} and hit.granularity == "fine":
                 gran_bonus = 0.18
@@ -267,7 +267,7 @@ class Reranker:
             hits = [h for h in hits if basename_lower(h.source) in _keep_papers]
 
         # 不同问题类型每篇最多多少 chunk
-        if query_type in {"review", "gene_list"}:
+        if query_type in {"review", "gene_list", "general"}:
             max_per_source = 1      # 综述类强制多样性
         elif query_type in {"mechanism", "qtl_gwas"}:
             max_per_source = 2
@@ -289,7 +289,7 @@ class Reranker:
 
         # zh-v2: 中文问题保底英文证据 —— 中文语料对株高/基础科学类证据不足，
         # 避免最终池被泛匹配中文文献稀释，确保英文 hits 至少 EN_MIN 个进入。
-        if any(h.lang == "zh" for h in hits) and query_type in ("gene_list", "count", "review"):
+        if any(h.lang == "zh" for h in hits) and query_type in ("gene_list", "count", "review", "general"):
             EN_MIN = 10
             if sum(1 for h in selected if h.lang == "en") < EN_MIN:
                 _chosen = {basename_lower(h.source) for h in selected}
@@ -303,7 +303,7 @@ class Reranker:
         # zh-v6: 中文问题保底中文文献 —— 高分英文综述(para交叉加成+引用加成)会把
         # 中文 chunk 全部挤出(如"高粱的营养价值"86条中文被全裁), 确保最终池
         # 至少保留 ZH_MIN 条中文证据, 供模型回答中文文献。
-        if any(h.lang == "zh" for h in hits) and query_type in ("review", "gene_list", "count", "mechanism"):
+        if any(h.lang == "zh" for h in hits) and query_type in ("review", "gene_list", "count", "mechanism", "general"):
             ZH_MIN = max(limit // 3, 3)
             if sum(1 for h in selected if h.lang == "zh") < ZH_MIN:
                 _chosen = {basename_lower(h.source) for h in selected}

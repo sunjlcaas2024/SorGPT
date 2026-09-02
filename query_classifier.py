@@ -402,3 +402,49 @@ def classify_query_type(query: str) -> Tuple[str, List[str], str]:
         extra = []
 
     return primary, extra, kw
+
+
+def classify_simplified(query: str) -> Tuple[str, List[str], str]:
+    """简化分类（调试版）：除基因问题外不再划分问题类型。
+    返回 (primary_type, extra_types, en_keywords)
+
+    - count/locate/boundary/sequence：确定性专用处理器，原样保留（合并会变差）。
+    - 基因问题（gene_list/gene_function/克隆基因/显式基因符号）：保留专用类型
+      （QTL/GWAS 按用户确认不属于基因问题）。
+    - 其余（review/factoid/mechanism/qtl_gwas/未知）：统一走 'general' 通用模板。
+    """
+    q      = norm_text(query).lower()
+    q_orig = norm_text(query)
+    kw     = _build_keywords(query)
+
+    # ── 确定性专用处理器 ─────────────────────────────────────────
+    if _is_boundary(q):
+        return "boundary", [], kw
+    if _is_count(q):
+        return "count", [], kw
+    if _is_locate(q):
+        return "locate", [], kw
+    if _is_sequence(q, q_orig):
+        return "sequence", [], kw
+
+    # ── 基因问题：用完整分类拿主类型+附加检索（保留 extra_types/DB 注入）──
+    full_primary, full_extra, _ = classify_query_type(query)
+    if full_primary == "qtl_gwas":
+        # 用户确认：QTL/GWAS 不是基因问题 → 通用模板
+        return "general", [], kw
+    if full_primary in ("gene_list", "gene_function"):
+        return full_primary, full_extra, kw
+
+    # ── 克隆基因：完整分类可能落 review；主动识别保证 pipeline 的 is_cloned 拦截生效 ──
+    if any(p in q for p in (
+        "克隆基因", "克隆的基因", "已克隆基因", "已克隆的基因",
+        "cloned gene", "cloned genes", "known gene", "known genes",
+    )):
+        return "gene_list", [], kw
+
+    # ── 显式基因符号（Dw1/Sobic 等）→ 基因功能专用路径 ──────────
+    if _has_gene(q_orig):
+        return "gene_function", [], kw
+
+    # ── 其余全部 → 通用模板 ──────────────────────────────────────
+    return "general", [], kw

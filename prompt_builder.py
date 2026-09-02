@@ -205,6 +205,17 @@ Cite every factual claim.
 Answer concisely in under 800 words (prioritize the most important points; do not pad).
 """,
 
+"general": """\
+TASK: Answer the user's question directly and completely, using ONLY the sorghum literature evidence below.
+
+- Open with the direct answer in one or two sentences.
+- Then expand as the question requires: supporting evidence, the specific papers (first author, year, journal, one-line finding — each cited [n]), mechanism, comparisons, or open questions.
+- Let the question drive the structure: "which papers" → name them; "how/why" → explain the mechanism; a comparison → compare explicitly; an overview → synthesize across sources.
+- If the evidence is insufficient, say so plainly and describe the closest evidence found. Never fabricate facts, papers, statistics, or DOIs.
+- Cite every factual claim [n]. When a (GeneDB) block is present, prefer it for gene IDs, coordinates, and domains.
+- Be thorough but concise: match length to what the question needs — a simple fact gets a short answer, a broad synthesis may run longer. No padding.
+""",
+
 "gene_list": """\
 TASK: Compile a gene list related to the requested trait or process.
 • Group genes by subfamily or function (no flat lists).
@@ -306,6 +317,16 @@ _TASK_ZH = {
 识别主导基因家族、关键开放问题，并与其他禾本科作物比较。
 每个论断需引用来源。
 总篇幅控制在 800 字以内（优先讲重点，不要凑字数）。
+""",
+
+"general": """\
+任务：仅基于下方提供的高粱文献证据，直接、完整地回答用户的问题。
+• 开头一两句直接给出答案。
+• 然后按问题需要展开：支持证据、具体论文（第一作者、年份、期刊、一句话结论，每篇标注 [n]）、机制、比较或开放问题。
+• 结构随问题走：问"哪些论文"就列论文；问"如何/为什么"就讲机制；问比较就显式对比；问综述就跨来源综合。
+• 若证据不足以回答，明确说明，并描述找到的最接近的证据；绝不编造事实、论文、统计数字或 DOI。
+• 每个论断需引用来源 [n]；上方有 (GeneDB) 数据块时，基因 ID、坐标、结构域优先采用。
+• 详略得当：长度匹配问题所需——简单事实给短答案，广泛综述可适当展开；不凑字数、不灌水。
 """,
 
 "gene_list": """\
@@ -415,7 +436,7 @@ def build_system_prompt(
                         omics_block = omics_block + ("\n" if omics_block else "") + extra_block
                 except Exception:
                     pass
-    if query_type in {"factoid", "gene_function", "qtl_gwas", "gene_list", "mechanism"}:
+    if query_type in {"factoid", "gene_function", "qtl_gwas", "gene_list", "mechanism", "general"}:
         raw = _query_db(user_query, max_genes=2)
         if raw:
             header = (

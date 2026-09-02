@@ -23,10 +23,10 @@ import re
 import json
 import os
 from typing import Dict, Any, List, Iterator, Tuple, Optional, Set
-from config import CSV_PATHS, REFERENCE_LIMITS, COUNT_QUERY_MAX_SHOW
+from config import CSV_PATHS, REFERENCE_LIMITS, COUNT_QUERY_MAX_SHOW, CLASSIFY_SIMPLIFIED
 from embeddings import BgeEmbeddingsWrapper
 from metadata_loader import load_citation_map, safe_get_ref_info
-from query_classifier import classify_query_type
+from query_classifier import classify_query_type, classify_simplified
 from retriever import Retriever, MetaPaper, ChunkHit
 from reranker import Reranker
 from prompt_builder import build_system_prompt
@@ -426,8 +426,11 @@ class SorghumRAGPipeline:
         """
         SorGPT 主入口函数。
         """
-        # 1. 分类
-        query_type, extra_types, en_keywords = classify_query_type(user_query)
+        # 1. 分类（simplified 调试版：除基因问题外不再划分问题类型）
+        if CLASSIFY_SIMPLIFIED:
+            query_type, extra_types, en_keywords = classify_simplified(user_query)
+        else:
+            query_type, extra_types, en_keywords = classify_query_type(user_query)
         # count 类特殊处理：克隆基因相关问题从数据库查询
         if query_type == "count":
             # 检查是否是克隆/已知基因相关的统计问题
@@ -493,7 +496,7 @@ class SorghumRAGPipeline:
                 )
                 chunk_hits.extend(extra_hits)
         # mechanism / review / gene_list 还追加子主题
-        if query_type in {"mechanism", "review", "gene_list"}:
+        if query_type in {"mechanism", "review", "gene_list", "general"}:
             subtopics = self._rule_subtopics(user_query, en_keywords)
             for topic in subtopics:
                 extra_hits = self.retriever.retrieve_fulltext(topic, topic, meta_hits, query_type)
@@ -569,8 +572,11 @@ class SorghumRAGPipeline:
         SorGPT 流式问答入口，yield每个token供API流式响应。
         先完成检索，然后流式输出生成的答案。
         """
-        # 1. 分类
-        query_type, extra_types, en_keywords = classify_query_type(user_query)
+        # 1. 分类（simplified 调试版：除基因问题外不再划分问题类型）
+        if CLASSIFY_SIMPLIFIED:
+            query_type, extra_types, en_keywords = classify_simplified(user_query)
+        else:
+            query_type, extra_types, en_keywords = classify_query_type(user_query)
         if query_type in ["count", "boundary", "locate"]:
             # 这些类型直接返回完整答案，不需要流式生成
             result = self.ask(user_query)
@@ -612,7 +618,7 @@ class SorghumRAGPipeline:
                 )
                 chunk_hits.extend(extra_hits)
         # mechanism / review / gene_list 还追加子主题
-        if query_type in {"mechanism", "review", "gene_list"}:
+        if query_type in {"mechanism", "review", "gene_list", "general"}:
             subtopics = self._rule_subtopics(user_query, en_keywords)
             for topic in subtopics:
                 extra_hits = self.retriever.retrieve_fulltext(topic, topic, meta_hits, query_type)
