@@ -32,10 +32,44 @@ gene_scan_output/
 eval_output/
 
 # Backup files
-*.bak
+*.bak*
 *.bak.*
 
 # Output
 app.out
 nohup.out
 .env*
+
+# === 2026-09-02 精简: 移出跟踪的非当前版本文件(磁盘保留, 完整树见 tag legacy_full_20260902)===
+# 一次性/残留补丁与旧快照
+_fix_seq_trigger.py
+_patch_server.py
+config.py.current
+query_expander.py
+gene_scanner.py
+test_seq_regression.py
+verify_meta_chunked.py
+zh_removed_sources.txt
+citation_fetcher.py
+citation_fetcher_oa.py
+static/
+
+# 评估工具与数据集(历史质量档案, 不在当前运行版本)
+eval/
+eval_dataset.json
+eval_questions_clean_200.json
+eval_runner.py
+
+# 损坏的旧构建脚本(源文件即无法编译)
+scripts/01_build_sorghum_index4.py
+
+# 一次性现场诊断脚本(服务器工作目录)
+diag_ph*.py
+fix_zhv2b.py
+patch_zhv2.py
+verify_zhv2.py
+.ready_flag
+
+# 大运行时数据(避免误提交)
+zh_bm25_idf.pkl
+knowledge_graph.pkl
